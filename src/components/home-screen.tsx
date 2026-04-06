@@ -19,6 +19,8 @@ import { Card, Input, MetricCard, PillButton, SectionTitle, Select, Shell, Texta
 
 export function HomeScreen() {
   const { state, actions, now, hydrated } = useAppStore();
+  const [showRunningLogger, setShowRunningLogger] = useState(false);
+  const [showHabits, setShowHabits] = useState(false);
   const [newLanguageName, setNewLanguageName] = useState("");
   const [newHabitName, setNewHabitName] = useState("");
   const [manualMinutes, setManualMinutes] = useState("20");
@@ -130,7 +132,7 @@ export function HomeScreen() {
         </p>
       </header>
 
-      <div className="space-y-6">
+      <div className="space-y-5">
         <Card className="relative overflow-hidden border-blue-400/15 bg-[linear-gradient(135deg,rgba(22,50,95,0.95),rgba(8,17,31,0.96)_55%,rgba(5,10,20,0.98))]">
           <div className="absolute right-[-3rem] top-[-3rem] h-36 w-36 rounded-full bg-blue-400/16 blur-3xl" />
           <div className="absolute bottom-[-4rem] left-[-2rem] h-40 w-40 rounded-full bg-cyan-300/8 blur-3xl" />
@@ -339,39 +341,61 @@ export function HomeScreen() {
                     {runsToday.length} today • {runningWeek.runCount} runs this week
                   </p>
                 </div>
-                <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3 text-right">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-blue-100/45">Weekly distance</p>
+                <button
+                  className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3 text-right"
+                  onClick={() => setShowRunningLogger((current) => !current)}
+                  type="button"
+                >
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-blue-100/45">
+                    {showRunningLogger ? "Hide run logger" : "Open run logger"}
+                  </p>
                   <p className="mt-2 text-lg font-medium text-white">{runningWeek.totalDistanceMiles.toFixed(1)} mi</p>
-                </div>
+                </button>
               </div>
-              <div className="mt-4 grid gap-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <Input inputMode="decimal" onChange={(event) => setRunDistance(event.target.value)} placeholder="Distance" value={runDistance} />
-                  <Select onChange={(event) => setRunUnit(event.target.value as "mi" | "km")} value={runUnit}>
-                    <option value="mi">Miles</option>
-                    <option value="km">KM</option>
+              {showRunningLogger ? (
+                <div className="mt-4 grid gap-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input inputMode="decimal" onChange={(event) => setRunDistance(event.target.value)} placeholder="Distance" value={runDistance} />
+                    <Select onChange={(event) => setRunUnit(event.target.value as "mi" | "km")} value={runUnit}>
+                      <option value="mi">Miles</option>
+                      <option value="km">KM</option>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input inputMode="numeric" onChange={(event) => setRunDuration(event.target.value)} placeholder="Duration (min)" value={runDuration} />
+                    <Input onChange={(event) => setRunPace(event.target.value)} placeholder="Pace (optional)" value={runPace} />
+                  </div>
+                  <Select onChange={(event) => setRunType(event.target.value)} value={runType}>
+                    {RUN_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
                   </Select>
+                  <Textarea onChange={(event) => setRunNotes(event.target.value)} placeholder="Optional notes" value={runNotes} />
+                  <PillButton onClick={addRun}>Add run</PillButton>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Input inputMode="numeric" onChange={(event) => setRunDuration(event.target.value)} placeholder="Duration (min)" value={runDuration} />
-                  <Input onChange={(event) => setRunPace(event.target.value)} placeholder="Pace (optional)" value={runPace} />
+              ) : (
+                <div className="mt-4 rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3">
+                  <p className="text-sm text-muted/88">
+                    Keep this folded until you need it. Your running summary stays visible above.
+                  </p>
                 </div>
-                <Select onChange={(event) => setRunType(event.target.value)} value={runType}>
-                  {RUN_TYPES.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </Select>
-                <Textarea onChange={(event) => setRunNotes(event.target.value)} placeholder="Optional notes" value={runNotes} />
-                <PillButton onClick={addRun}>Add run</PillButton>
-              </div>
+              )}
             </Card>
           </div>
         </section>
 
         <section>
-          <SectionTitle title="Habits / sobriety" subtitle="Each tracker gets its own clear, premium card." />
+          <SectionTitle
+            title="Habits / sobriety"
+            subtitle="Each tracker keeps its own history and timer."
+            action={
+              <PillButton onClick={() => setShowHabits((current) => !current)} variant="ghost">
+                {showHabits ? "Collapse" : "Expand"}
+              </PillButton>
+            }
+          />
           <Card>
             <div className="grid grid-cols-[1fr_auto] gap-3">
               <Input onChange={(event) => setNewHabitName(event.target.value)} placeholder="Add habit" value={newHabitName} />
@@ -384,59 +408,68 @@ export function HomeScreen() {
                 Add
               </PillButton>
             </div>
-            <div className="mt-4 space-y-3">
-              {state.habits.map((habit) => (
-                <div
-                  className="rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(8,17,31,0.5))] p-4"
-                  key={habit.id}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-base font-medium text-white">{habit.name}</p>
-                      <p className="mt-1 text-sm text-blue-100/72">
-                        {hydrated ? formatTimeSince(habit.currentStartAt, now) : "--"}
-                      </p>
+            {showHabits ? (
+              <div className="mt-4 space-y-3">
+                {state.habits.map((habit) => (
+                  <div
+                    className="rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(8,17,31,0.5))] p-4"
+                    key={habit.id}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-base font-medium text-white">{habit.name}</p>
+                        <p className="mt-1 text-sm text-blue-100/72">
+                          {hydrated ? formatTimeSince(habit.currentStartAt, now) : "--"}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <PillButton onClick={() => renameHabit(habit.id, habit.name)} variant="ghost">
+                          Edit
+                        </PillButton>
+                        <PillButton onClick={() => actions.resetHabit(habit.id)} variant="danger">
+                          Reset
+                        </PillButton>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <PillButton onClick={() => renameHabit(habit.id, habit.name)} variant="ghost">
-                        Edit
-                      </PillButton>
-                      <PillButton onClick={() => actions.resetHabit(habit.id)} variant="danger">
-                        Reset
-                      </PillButton>
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-blue-100/45">Streak</p>
+                        <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
+                          {getHabitStreak(habit)}d
+                        </p>
+                      </div>
+                      <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-blue-100/45">History</p>
+                        <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
+                          {habit.resets.length}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <Toggle
+                        checked={habit.cleanDays[today] ?? false}
+                        label="Clean today?"
+                        onClick={() =>
+                          actions.toggleHabitDay(habit.id, today, !(habit.cleanDays[today] ?? false))
+                        }
+                      />
+                    </div>
+                    <div className="mt-3 flex justify-end">
+                      <button className="text-xs text-red-200" onClick={() => deleteHabit(habit.id, habit.name)} type="button">
+                        Delete habit
+                      </button>
                     </div>
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-blue-100/45">Streak</p>
-                      <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
-                        {getHabitStreak(habit)}d
-                      </p>
-                    </div>
-                    <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-blue-100/45">History</p>
-                      <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
-                        {habit.resets.length}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <Toggle
-                      checked={habit.cleanDays[today] ?? false}
-                      label="Clean today?"
-                      onClick={() =>
-                        actions.toggleHabitDay(habit.id, today, !(habit.cleanDays[today] ?? false))
-                      }
-                    />
-                  </div>
-                  <div className="mt-3 flex justify-end">
-                    <button className="text-xs text-red-200" onClick={() => deleteHabit(habit.id, habit.name)} type="button">
-                      Delete habit
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3">
+                <p className="text-sm text-muted/88">
+                  {state.habits.length} tracked habit{state.habits.length === 1 ? "" : "s"}.
+                  Expand when you want the detailed cards and reset controls.
+                </p>
+              </div>
+            )}
           </Card>
         </section>
 

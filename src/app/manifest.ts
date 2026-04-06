@@ -1,10 +1,11 @@
 import type { MetadataRoute } from "next";
+import { BRANDING } from "@/lib/branding";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Fervet",
-    short_name: "Fervet",
-    description: "A disciplined personal life OS for visible consistency.",
+    name: BRANDING.appName,
+    short_name: BRANDING.appName,
+    description: BRANDING.description,
     start_url: "/",
     display: "standalone",
     background_color: "#08111f",
@@ -12,7 +13,7 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "portrait",
     icons: [
       {
-        src: "/icon.svg",
+        src: BRANDING.iconPath,
         sizes: "any",
         type: "image/svg+xml",
         purpose: "maskable",

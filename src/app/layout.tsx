@@ -2,23 +2,25 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { BottomNav } from "@/components/bottom-nav";
 import { PWARegister } from "@/components/pwa-register";
+import { LaunchSplash } from "@/components/launch-splash";
+import { BRANDING } from "@/lib/branding";
 import { StoreProvider } from "@/lib/store";
 
 export const metadata: Metadata = {
-  title: "Fervet",
-  description: "A disciplined personal life OS for visible consistency.",
-  applicationName: "Fervet",
+  title: BRANDING.appName,
+  description: BRANDING.description,
+  applicationName: BRANDING.appName,
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Fervet",
+    title: BRANDING.appName,
   },
   formatDetection: {
     telephone: false,
   },
   icons: {
-    icon: "/icon.svg",
-    apple: "/icon.svg",
+    icon: BRANDING.iconPath,
+    apple: BRANDING.iconPath,
   },
 };
 
@@ -39,6 +41,7 @@ export default function RootLayout({
       <body className="bg-background text-foreground">
         <StoreProvider>
           <PWARegister />
+          <LaunchSplash />
           {children}
           <BottomNav />
         </StoreProvider>
