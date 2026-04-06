@@ -1,0 +1,578 @@
+"use client";
+
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { RUN_TYPES } from "@/lib/constants";
+import { todayKey } from "@/lib/date";
+import {
+  getHabitStreak,
+  getLanguageSummaries,
+  getOverallStreak,
+  getRunningPerformanceSummary,
+  getWeeklyLanguageMinutes,
+  getWeeklyMovementCount,
+  getWeeklyRunningSummary,
+  getWeeklyTaskCount,
+  getWeightSummary,
+} from "@/lib/metrics";
+import { useAppStore } from "@/lib/store";
+import { DateKey } from "@/lib/types";
+import { Card, MetricCard, PillButton, SectionTitle, Select, Shell } from "@/components/ui";
+
+function formatRun(run: { distance: number; unit: string; duration: number; runType: string }) {
+  return `${run.distance} ${run.unit} • ${run.duration} min • ${run.runType}`;
+}
+
+export function ProgressScreen() {
+  const { state, actions } = useAppStore();
+  const weight = getWeightSummary(state);
+  const languageSummaries = getLanguageSummaries(state);
+  const running = getWeeklyRunningSummary(state);
+  const runningPerformance = getRunningPerformanceSummary(state);
+
+  function promptUpdateTask(taskId: string, title: string, dueDate: string) {
+    const nextTitle = window.prompt("Edit task", title);
+    if (!nextTitle) return;
+    const nextDueDate = window.prompt("Edit due date (YYYY-MM-DD)", dueDate);
+    if (!nextDueDate) return;
+    actions.updateTask(taskId, nextTitle, nextDueDate as DateKey);
+  }
+
+  function promptUpdateLanguageLog(logId: string, minutes: number, note?: string) {
+    const nextMinutes = window.prompt("Edit minutes", String(minutes));
+    if (!nextMinutes) return;
+    const parsed = Number(nextMinutes);
+    if (!Number.isFinite(parsed) || parsed <= 0) return;
+    const nextNote = window.prompt("Edit note", note ?? "") ?? undefined;
+    actions.updateLanguageLog(logId, parsed, nextNote);
+  }
+
+  function promptUpdateMovementLog(logId: string, duration: number, note?: string) {
+    const nextDuration = window.prompt("Edit movement minutes", String(duration));
+    if (!nextDuration) return;
+    const parsed = Number(nextDuration);
+    if (!Number.isFinite(parsed) || parsed <= 0) return;
+    const nextNote = window.prompt("Edit note", note ?? "") ?? undefined;
+    actions.updateMovementLog(logId, parsed, nextNote);
+  }
+
+  function promptUpdateWeight(entryId: string, weightValue: number, date: string) {
+    const nextWeight = window.prompt("Edit weight", String(weightValue));
+    if (!nextWeight) return;
+    const parsed = Number(nextWeight);
+    if (!Number.isFinite(parsed) || parsed <= 0) return;
+    const nextDate = window.prompt("Edit date (YYYY-MM-DD)", date);
+    if (!nextDate) return;
+    actions.updateWeightEntry(entryId, parsed, nextDate as DateKey);
+  }
+
+  function promptUpdateRunning(logId: string, run: typeof state.runningLogs[number]) {
+    const distance = window.prompt("Edit distance", String(run.distance));
+    if (!distance) return;
+    const duration = window.prompt("Edit duration (min)", String(run.duration));
+    if (!duration) return;
+    const parsedDistance = Number(distance);
+    const parsedDuration = Number(duration);
+    if (!Number.isFinite(parsedDistance) || parsedDistance <= 0 || !Number.isFinite(parsedDuration) || parsedDuration <= 0) {
+      return;
+    }
+    const runType = window.prompt(
+      `Edit run type (${RUN_TYPES.join(", ")})`,
+      run.runType,
+    );
+    if (!runType) return;
+    const pace = window.prompt("Edit pace", run.pace ?? "") ?? undefined;
+    const notes = window.prompt("Edit notes", run.notes ?? "") ?? undefined;
+    const date = window.prompt("Edit date (YYYY-MM-DD)", run.date);
+    if (!date) return;
+
+    actions.updateRunningLog(logId, {
+      date: date as DateKey,
+      distance: parsedDistance,
+      unit: run.unit,
+      duration: parsedDuration,
+      pace,
+      runType,
+      notes,
+    });
+  }
+
+  function promptUpdateMotto(mottoId: string, latin: string, english: string) {
+    const nextLatin = window.prompt("Edit Latin", latin);
+    if (!nextLatin) return;
+    const nextEnglish = window.prompt("Edit English meaning", english);
+    if (!nextEnglish) return;
+    actions.updateMotto(mottoId, nextLatin, nextEnglish);
+  }
+
+  function promptAddPr() {
+    const label = window.prompt("PR label/event", "5K");
+    if (!label) return;
+    const value = window.prompt("PR value/time or distance", "24:30");
+    if (!value) return;
+    const date = window.prompt("Date (YYYY-MM-DD)", todayKey());
+    if (!date) return;
+    const note = window.prompt("Optional note", "") ?? undefined;
+    actions.addRunningPr(label, value, date as DateKey, note || undefined);
+  }
+
+  function promptUpdatePr(prId: string, label: string, value: string, date: DateKey, note?: string) {
+    const nextLabel = window.prompt("Edit PR label/event", label);
+    if (!nextLabel) return;
+    const nextValue = window.prompt("Edit PR value/time or distance", value);
+    if (!nextValue) return;
+    const nextDate = window.prompt("Edit date (YYYY-MM-DD)", date);
+    if (!nextDate) return;
+    const nextNote = window.prompt("Edit note", note ?? "") ?? undefined;
+    actions.updateRunningPr(prId, nextLabel, nextValue, nextDate as DateKey, nextNote || undefined);
+  }
+
+  return (
+    <Shell>
+      <header className="mb-7">
+        <p className="text-[11px] uppercase tracking-[0.28em] text-blue-200/65">Progress</p>
+        <h1 className="mt-3 text-white">Your momentum, summarized.</h1>
+        <p className="mt-3 max-w-xs text-sm text-muted/90">
+          A cleaner read on the disciplines that are holding and the controls for managing your data.
+        </p>
+      </header>
+
+      <div className="space-y-6">
+        <Card className="border-blue-400/12 bg-[linear-gradient(180deg,rgba(21,49,98,0.55),rgba(10,18,32,0.96))]">
+          <div className="grid grid-cols-2 gap-3">
+            <MetricCard label="Overall streak" value={`${getOverallStreak(state)} days`} />
+            <MetricCard label="Habits active" value={`${state.habits.length}`} />
+            <MetricCard label="Study this week" value={`${getWeeklyLanguageMinutes(state)} min`} />
+            <MetricCard label="Soccer this week" value={`${getWeeklyMovementCount(state)}`} hint="Sessions" />
+            <MetricCard label="Runs this week" value={`${running.runCount}`} hint={`${running.totalDistanceMiles.toFixed(1)} mi`} />
+            <MetricCard label="Longest run" value={`${running.longestRunMiles.toFixed(1)} mi`} hint={running.averagePace ?? "No pace yet"} />
+            <MetricCard
+              label="Weight change"
+              value={
+                weight.delta !== undefined ? `${weight.delta > 0 ? "+" : ""}${weight.delta.toFixed(1)}` : "--"
+              }
+              hint={weight.start !== undefined ? `From ${weight.start}` : "Set a starting weight"}
+            />
+            <MetricCard label="Tasks this week" value={`${getWeeklyTaskCount(state)}`} />
+          </div>
+        </Card>
+
+        <section>
+          <SectionTitle title="Language totals" subtitle="Per language, with reset controls." />
+          <div className="space-y-3">
+            {languageSummaries.map((language) => (
+              <Card key={language.id}>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-lg font-semibold tracking-[-0.03em] text-white">{language.name}</p>
+                    <p className="mt-1 text-sm text-muted/90">
+                      {language.todayMinutes} min today • {language.weekMinutes} min this week
+                    </p>
+                  </div>
+                  <PillButton
+                    onClick={() => {
+                      if (window.confirm(`Reset totals for ${language.name}?`)) {
+                        actions.resetLanguageTotals(language.id);
+                      }
+                    }}
+                    variant="ghost"
+                  >
+                    Reset
+                  </PillButton>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <SectionTitle title="Habit streaks" subtitle="Independent trackers with strong emphasis." />
+          <div className="grid grid-cols-2 gap-3">
+            {state.habits.map((habit) => (
+              <MetricCard key={habit.id} label={habit.name} value={`${getHabitStreak(habit)} days`} />
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <SectionTitle
+            title="Running performance"
+            subtitle="Weekly mileage, longest efforts, and current streaks."
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <MetricCard
+              label="Run streak"
+              value={`${runningPerformance.currentStreak} days`}
+              hint={`Best ${runningPerformance.bestStreak} days`}
+            />
+            <MetricCard
+              label="Longest ever"
+              value={
+                runningPerformance.longestEver
+                  ? `${runningPerformance.longestEver.distance} ${runningPerformance.preferredUnit}`
+                  : "--"
+              }
+              hint={
+                runningPerformance.longestEver
+                  ? runningPerformance.longestEver.date
+                  : "No runs yet"
+              }
+            />
+            <MetricCard
+              label="Longest 30 days"
+              value={
+                runningPerformance.longestLast30
+                  ? `${runningPerformance.longestLast30.distance} ${runningPerformance.preferredUnit}`
+                  : "--"
+              }
+              hint={
+                runningPerformance.longestLast30
+                  ? runningPerformance.longestLast30.date
+                  : "No recent runs"
+              }
+            />
+            <MetricCard
+              label="Weekly unit"
+              value={runningPerformance.preferredUnit.toUpperCase()}
+              hint="Mileage graph basis"
+            />
+          </div>
+          <Card className="mt-4 h-72 border-blue-400/12">
+            {runningPerformance.weeklyMileage.length > 0 ? (
+              <ResponsiveContainer height="100%" width="100%">
+                <LineChart
+                  data={runningPerformance.weeklyMileage}
+                  margin={{ top: 16, right: 8, left: -16, bottom: 8 }}
+                >
+                  <CartesianGrid stroke="rgba(141,164,196,0.1)" vertical={false} />
+                  <XAxis dataKey="week" stroke="#8da4c4" tickLine={false} axisLine={false} />
+                  <YAxis stroke="#8da4c4" tickLine={false} axisLine={false} />
+                  <Tooltip
+                    formatter={(value: number) => [
+                      `${value} ${runningPerformance.preferredUnit}`,
+                      "Weekly total",
+                    ]}
+                    contentStyle={{
+                      background: "rgba(19,35,58,0.96)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: 18,
+                      color: "#e8f0ff",
+                    }}
+                  />
+                  <Line
+                    dataKey="total"
+                    stroke="#60a5fa"
+                    strokeWidth={3.5}
+                    dot={{ fill: "#93c5fd", r: 4 }}
+                    type="monotone"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-center text-sm text-muted/85">
+                Add runs to see weekly mileage over time.
+              </div>
+            )}
+          </Card>
+        </section>
+
+        <section>
+          <SectionTitle title="Weight trend" subtitle="A calmer, roomier view of the long arc." />
+          <Card className="h-80 border-blue-400/12">
+            {weight.chartData.length > 1 ? (
+              <ResponsiveContainer height="100%" width="100%">
+                <LineChart data={weight.chartData} margin={{ top: 16, right: 8, left: -20, bottom: 8 }}>
+                  <CartesianGrid stroke="rgba(141,164,196,0.1)" vertical={false} />
+                  <XAxis dataKey="date" stroke="#8da4c4" tickLine={false} axisLine={false} />
+                  <YAxis stroke="#8da4c4" tickLine={false} axisLine={false} domain={["dataMin - 2", "dataMax + 2"]} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "rgba(19,35,58,0.96)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: 18,
+                      color: "#e8f0ff",
+                    }}
+                  />
+                  <Line dataKey="weight" stroke="#60a5fa" strokeWidth={3.5} dot={{ fill: "#93c5fd", r: 4 }} type="monotone" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-center text-sm text-muted/85">
+                Add at least two weight entries to see the trend line.
+              </div>
+            )}
+          </Card>
+        </section>
+
+        <section>
+          <SectionTitle
+            title="Running PRs"
+            subtitle="Store your personal records in one clean, editable list."
+            action={<PillButton onClick={promptAddPr}>Add PR</PillButton>}
+          />
+          <div className="space-y-3">
+            {state.runningPrs.length > 0 ? (
+              state.runningPrs
+                .slice()
+                .sort((a, b) => b.date.localeCompare(a.date))
+                .map((pr) => (
+                  <Card key={pr.id}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-base font-medium text-white">{pr.label}</p>
+                        <p className="mt-1 text-lg font-semibold tracking-[-0.03em] text-blue-100">
+                          {pr.value}
+                        </p>
+                        <p className="mt-1 text-sm text-muted/85">
+                          {pr.date}{pr.note ? ` • ${pr.note}` : ""}
+                        </p>
+                      </div>
+                      <div className="flex gap-3">
+                        <button
+                          className="text-xs text-blue-100/80"
+                          onClick={() => promptUpdatePr(pr.id, pr.label, pr.value, pr.date, pr.note)}
+                          type="button"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="text-xs text-red-200"
+                          onClick={() => {
+                            if (window.confirm(`Delete PR "${pr.label}"?`)) {
+                              actions.deleteRunningPr(pr.id);
+                            }
+                          }}
+                          type="button"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </Card>
+                ))
+            ) : (
+              <Card>
+                <p className="text-sm text-muted/85">No PRs saved yet.</p>
+              </Card>
+            )}
+          </div>
+        </section>
+
+        <section>
+          <SectionTitle title="Motto manager" subtitle="Add, edit, delete, and switch rotation mode." />
+          <Card className="space-y-4">
+            <div className="grid grid-cols-[1fr_auto] gap-3">
+              <Select
+                onChange={(event) => actions.setMottoRotationMode(event.target.value as "cycle" | "random")}
+                value={state.mottoRotationMode}
+              >
+                <option value="cycle">Cycle</option>
+                <option value="random">Random</option>
+              </Select>
+              <PillButton
+                onClick={() => {
+                  const latin = window.prompt("Latin motto");
+                  if (!latin) return;
+                  const english = window.prompt("English meaning");
+                  if (!english) return;
+                  actions.addMotto(latin, english);
+                }}
+              >
+                Add
+              </PillButton>
+            </div>
+            <div className="space-y-3">
+              {state.mottoes.map((motto) => (
+                <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={motto.id}>
+                  <p className="text-sm font-medium text-white">{motto.latin}</p>
+                  <p className="mt-1 text-sm text-muted/85">{motto.english}</p>
+                  <div className="mt-3 flex gap-3">
+                    <button className="text-xs text-blue-100/80" onClick={() => promptUpdateMotto(motto.id, motto.latin, motto.english)} type="button">
+                      Edit
+                    </button>
+                    <button
+                      className="text-xs text-red-200"
+                      onClick={() => {
+                        if (window.confirm("Delete this motto?")) actions.deleteMotto(motto.id);
+                      }}
+                      type="button"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </section>
+
+        <section>
+          <SectionTitle title="Data controls" subtitle="Edit, delete, and reset without losing app structure." />
+          <Card className="space-y-5">
+            <div>
+              <p className="text-sm font-medium text-white">Recent language logs</p>
+              <div className="mt-3 space-y-3">
+                {state.languageLogs.slice(0, 5).map((log) => (
+                  <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={log.id}>
+                    <p className="text-sm text-white">
+                      {state.languages.find((language) => language.id === log.languageId)?.name ?? "Language"} • {log.minutes} min
+                    </p>
+                    <div className="mt-2 flex gap-3">
+                      <button className="text-xs text-blue-100/80" onClick={() => promptUpdateLanguageLog(log.id, log.minutes, log.note)} type="button">
+                        Edit
+                      </button>
+                      <button
+                        className="text-xs text-red-200"
+                        onClick={() => {
+                          if (window.confirm("Delete this language log?")) actions.deleteLanguageLog(log.id);
+                        }}
+                        type="button"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-white">Recent movement logs</p>
+              <div className="mt-3 space-y-3">
+                {state.movementLogs.slice(0, 5).map((log) => (
+                  <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={log.id}>
+                    <p className="text-sm text-white">{log.duration} min movement</p>
+                    <div className="mt-2 flex gap-3">
+                      <button className="text-xs text-blue-100/80" onClick={() => promptUpdateMovementLog(log.id, log.duration, log.note)} type="button">
+                        Edit
+                      </button>
+                      <button
+                        className="text-xs text-red-200"
+                        onClick={() => {
+                          if (window.confirm("Delete this movement log?")) actions.deleteMovementLog(log.id);
+                        }}
+                        type="button"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-white">Recent runs</p>
+              <div className="mt-3 space-y-3">
+                {state.runningLogs.slice(0, 5).map((run) => (
+                  <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={run.id}>
+                    <p className="text-sm text-white">{formatRun(run)}</p>
+                    <div className="mt-2 flex gap-3">
+                      <button className="text-xs text-blue-100/80" onClick={() => promptUpdateRunning(run.id, run)} type="button">
+                        Edit
+                      </button>
+                      <button
+                        className="text-xs text-red-200"
+                        onClick={() => {
+                          if (window.confirm("Delete this run?")) actions.deleteRunningLog(run.id);
+                        }}
+                        type="button"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <PillButton
+                  onClick={() => {
+                    if (window.confirm("Reset all running logs?")) actions.resetRunningLogs();
+                  }}
+                  variant="ghost"
+                >
+                  Reset running logs
+                </PillButton>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-white">Weight entries</p>
+              <div className="mt-3 space-y-3">
+                {state.weightLogs
+                  .slice()
+                  .sort((a, b) => b.date.localeCompare(a.date))
+                  .slice(0, 5)
+                  .map((entry) => (
+                    <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={entry.id}>
+                      <p className="text-sm text-white">
+                        {entry.weight} on {entry.date}
+                      </p>
+                      <div className="mt-2 flex gap-3">
+                        <button className="text-xs text-blue-100/80" onClick={() => promptUpdateWeight(entry.id, entry.weight, entry.date)} type="button">
+                          Edit
+                        </button>
+                        <button
+                          className="text-xs text-red-200"
+                          onClick={() => {
+                            if (window.confirm("Delete this weight entry?")) actions.deleteWeightEntry(entry.id);
+                          }}
+                          type="button"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-white">Tasks</p>
+              <div className="mt-3 space-y-3">
+                {state.tasks.slice(0, 5).map((task) => (
+                  <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={task.id}>
+                    <p className="text-sm text-white">{task.title}</p>
+                    <p className="text-xs text-muted/80">{task.dueDate}</p>
+                    <div className="mt-2 flex gap-3">
+                      <button className="text-xs text-blue-100/80" onClick={() => promptUpdateTask(task.id, task.title, task.dueDate)} type="button">
+                        Edit
+                      </button>
+                      <button
+                        className="text-xs text-red-200"
+                        onClick={() => {
+                          if (window.confirm("Delete this task?")) actions.deleteTask(task.id);
+                        }}
+                        type="button"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              <PillButton
+                onClick={() => {
+                  if (window.confirm("Reset all language totals?")) actions.resetLanguageTotals();
+                }}
+                variant="ghost"
+              >
+                Reset language totals
+              </PillButton>
+              <PillButton
+                onClick={() => {
+                  if (window.confirm("Reset all data? This clears localStorage for Fervet.")) {
+                    actions.resetAllData();
+                  }
+                }}
+                variant="danger"
+              >
+                Reset All Data
+              </PillButton>
+            </div>
+          </Card>
+        </section>
+      </div>
+    </Shell>
+  );
+}

@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html {
+    @apply min-h-full bg-background;
+    background:
+      radial-gradient(circle at top, rgba(59, 130, 246, 0.22), transparent 26%),
+      radial-gradient(circle at 20% 20%, rgba(14, 165, 233, 0.08), transparent 24%),
+      #050b15;
+  }
+
+  body {
+    @apply min-h-screen bg-background font-sans text-foreground antialiased;
+    background:
+      radial-gradient(circle at top, rgba(59, 130, 246, 0.12), transparent 22%),
+      linear-gradient(180deg, #07111f 0%, #050b15 55%, #040811 100%);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  h1 {
+    @apply text-[2rem] font-semibold tracking-[-0.045em] text-foreground;
+  }
+
+  h2 {
+    @apply text-lg font-semibold text-foreground;
+  }
+
+  h3 {
+    @apply text-base font-medium text-foreground;
+  }
+
+  p {
+    @apply text-sm leading-6;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    outline: none;
+  }
+
+  ::selection {
+    background: rgba(59, 130, 246, 0.32);
+    color: #ffffff;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(141, 164, 196, 0.28);
+  border-radius: 999px;
+}
+
+@layer components {
+  .app-surface {
+    @apply rounded-[28px] border border-white/8 bg-panel/90 shadow-[0_18px_45px_rgba(0,0,0,0.34)] backdrop-blur-xl;
+  }
+}
