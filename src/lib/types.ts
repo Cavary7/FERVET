@@ -24,6 +24,22 @@ export type Language = {
   createdAt: string;
 };
 
+export type Subject = {
+  id: string;
+  name: string;
+  createdAt: string;
+};
+
+export type SubjectLog = {
+  id: string;
+  subjectId: string;
+  date: DateKey;
+  minutes: number;
+  note?: string;
+  createdAt: string;
+  source: "manual" | "timer";
+};
+
 export type MovementLog = {
   id: string;
   date: DateKey;
@@ -64,6 +80,13 @@ export type WeightLog = {
   createdAt: string;
 };
 
+export type WaistLog = {
+  id: string;
+  date: DateKey;
+  inches: number;
+  createdAt: string;
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -83,6 +106,7 @@ export type Habit = {
   id: string;
   name: string;
   createdAt: string;
+  trackingStartedAt: string;
   cleanDays: Record<DateKey, boolean>;
   currentStartAt: string;
   resets: HabitReset[];
@@ -92,10 +116,17 @@ export type AppState = {
   mottoes: Motto[];
   mottoRotationMode: MottoRotationMode;
   languages: Language[];
+  subjects: Subject[];
   selectedLanguageId?: string;
+  selectedSubjectId?: string;
   languageLogs: LanguageLog[];
+  subjectLogs: SubjectLog[];
   activeLanguageSession?: {
     languageId: string;
+    startedAt: string;
+  };
+  activeSubjectSession?: {
+    subjectId: string;
     startedAt: string;
   };
   movementLogs: MovementLog[];
@@ -104,6 +135,8 @@ export type AppState = {
   runningPrs: RunningPr[];
   weightStart?: number;
   weightLogs: WeightLog[];
+  waistStart?: number;
+  waistLogs: WaistLog[];
   tasks: Task[];
   habits: Habit[];
 };

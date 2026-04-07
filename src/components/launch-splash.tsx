@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BRANDING } from "@/lib/branding";
 import { todayKey } from "@/lib/date";
 import { getMottoForDate } from "@/lib/metrics";
@@ -13,13 +13,22 @@ export function LaunchSplash() {
   const [latinText, setLatinText] = useState("");
   const [englishText, setEnglishText] = useState("");
   const [showEnglish, setShowEnglish] = useState(false);
+  const motto = useMemo(() => {
+    if (!hydrated) return null;
+    return getMottoForDate(state, todayKey());
+  }, [hydrated, state]);
 
   useEffect(() => {
-    if (!hydrated) {
+    if (!hydrated || !motto) {
       return;
     }
 
-    const motto = getMottoForDate(state, todayKey());
+    if (window.sessionStorage.getItem("fervet:splash-seen") === "1") {
+      setMounted(false);
+      return;
+    }
+    window.sessionStorage.setItem("fervet:splash-seen", "1");
+
     const chars = Array.from(motto.latin);
     const step = Math.max(32, Math.min(58, Math.floor(1400 / Math.max(chars.length, 1))));
     setLatinText("");
@@ -43,7 +52,7 @@ export function LaunchSplash() {
     return () => {
       window.clearInterval(interval);
     };
-  }, [hydrated, state]);
+  }, [hydrated, motto]);
 
   if (!mounted) {
     return null;

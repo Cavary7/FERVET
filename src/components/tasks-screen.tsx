@@ -69,8 +69,21 @@ export function TasksScreen() {
   const [selectedDay, setSelectedDay] = useState<DateKey>(todayKey());
 
   const today = todayKey();
-  const todayTasks = state.tasks.filter((task) => task.dueDate === today && !task.completedAt);
-  const upcomingTasks = state.tasks.filter((task) => task.dueDate > today && !task.completedAt);
+  const visibleOpenTasks = useMemo(() => {
+    const sorted = state.tasks
+      .filter((task) => !task.completedAt)
+      .slice()
+      .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    const seenRecurring = new Set<string>();
+    return sorted.filter((task) => {
+      if (!task.recurringTaskId) return true;
+      if (seenRecurring.has(task.recurringTaskId)) return false;
+      seenRecurring.add(task.recurringTaskId);
+      return true;
+    });
+  }, [state.tasks]);
+  const todayTasks = visibleOpenTasks.filter((task) => task.dueDate === today);
+  const upcomingTasks = visibleOpenTasks.filter((task) => task.dueDate > today);
   const completedTasks = state.tasks.filter((task) => task.completedAt);
   const days = useMemo(() => plannerGrid(month), [month]);
   const selectedDayTasks = getTasksForDate(state, selectedDay);
@@ -133,7 +146,7 @@ export function TasksScreen() {
             <Field label="Task">
               <Input onChange={(event) => setTitle(event.target.value)} placeholder="Add a task" value={title} />
             </Field>
-            <Field label="Due date">
+            <Field label={recurrence ? "Starts on" : "Due date"}>
               <Input onChange={(event) => setDueDate(event.target.value as DateKey)} type="date" value={dueDate} />
             </Field>
             <Field label="Repeats">

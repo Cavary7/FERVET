@@ -4,10 +4,13 @@ import { useMemo, useState } from "react";
 import { addDays, formatDurationSeconds, formatLongDate, formatMonthLabel, toDateKey, todayKey } from "@/lib/date";
 import {
   getDayCompletion,
+  getHabitStreak,
   getLanguageMinutesForDay,
   getMottoForDate,
   getRunsForDay,
+  getSubjectMinutesForDay,
   getTasksForDate,
+  isHabitCleanForDay,
 } from "@/lib/metrics";
 import { useAppStore } from "@/lib/store";
 import { DateKey } from "@/lib/types";
@@ -35,7 +38,9 @@ export function CalendarScreen() {
   const selectedMovement = state.movementLogs.filter((log) => log.date === selectedDay);
   const selectedRuns = getRunsForDay(state, selectedDay);
   const selectedWeight = state.weightLogs.find((log) => log.date === selectedDay);
+  const selectedWaist = state.waistLogs.find((log) => log.date === selectedDay);
   const selectedLanguageLogs = state.languageLogs.filter((entry) => entry.date === selectedDay);
+  const selectedSubjectLogs = state.subjectLogs.filter((entry) => entry.date === selectedDay);
 
   return (
     <Shell>
@@ -108,7 +113,13 @@ export function CalendarScreen() {
             </p>
           </Card>
           <Card>
-            <p className="text-[11px] uppercase tracking-[0.2em] text-blue-100/45">Movement</p>
+            <p className="text-[11px] uppercase tracking-[0.2em] text-blue-100/45">Subjects</p>
+            <p className="mt-2 text-[28px] font-semibold tracking-[-0.04em] text-white">
+              {getSubjectMinutesForDay(state, selectedDay)} min
+            </p>
+          </Card>
+          <Card>
+            <p className="text-[11px] uppercase tracking-[0.2em] text-blue-100/45">Activity</p>
             <p className="mt-2 text-[28px] font-semibold tracking-[-0.04em] text-white">{selectedMovement.length}</p>
           </Card>
           <Card>
@@ -144,13 +155,29 @@ export function CalendarScreen() {
                 </div>
               );
             })}
-            {state.habits.map((habit) => (
-              <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={habit.id}>
-                {habit.name}: {habit.cleanDays[selectedDay] ? "clean" : "broken"}
-              </div>
-            ))}
+            {selectedSubjectLogs.map((entry) => {
+              const subjectName =
+                state.subjects.find((subject) => subject.id === entry.subjectId)?.name ?? "Subject";
+              return (
+                <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={entry.id}>
+                  {subjectName}: {entry.minutes} min{entry.note ? ` - ${entry.note}` : ""}
+                </div>
+              );
+            })}
+            {state.habits.map((habit) => {
+              const status = isHabitCleanForDay(habit, selectedDay);
+              return (
+                <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={habit.id}>
+                  {habit.name}:{" "}
+                  {status === null ? "untracked" : status ? `clean • ${getHabitStreak(habit)}d streak` : "broken"}
+                </div>
+              );
+            })}
             {selectedWeight ? (
               <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">Weight: {selectedWeight.weight}</div>
+            ) : null}
+            {selectedWaist ? (
+              <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">Waist: {selectedWaist.inches}&quot;</div>
             ) : null}
             {selectedDayTasks.map((task) => (
               <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={task.id}>
@@ -160,7 +187,9 @@ export function CalendarScreen() {
             {selectedMovement.length === 0 &&
             selectedRuns.length === 0 &&
             selectedLanguageLogs.length === 0 &&
+            selectedSubjectLogs.length === 0 &&
             !selectedWeight &&
+            !selectedWaist &&
             selectedDayTasks.length === 0 ? (
               <p>No entries recorded for this day.</p>
             ) : null}

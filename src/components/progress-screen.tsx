@@ -4,10 +4,13 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import { RUN_TYPES } from "@/lib/constants";
 import { formatDurationSeconds, todayKey } from "@/lib/date";
 import {
+  getAutoDetectedRunningBests,
   getHabitStreak,
   getLanguageSummaries,
   getOverallStreak,
   getRunningPerformanceSummary,
+  getSubjectSummaries,
+  getWaistSummary,
   getWeeklyLanguageMinutes,
   getWeeklyMovementCount,
   getWeeklyRunningSummary,
@@ -25,9 +28,12 @@ function formatRun(run: { distance: number; unit: string; duration: number; runT
 export function ProgressScreen() {
   const { state, actions } = useAppStore();
   const weight = getWeightSummary(state);
+  const waist = getWaistSummary(state);
   const languageSummaries = getLanguageSummaries(state);
+  const subjectSummaries = getSubjectSummaries(state);
   const running = getWeeklyRunningSummary(state);
   const runningPerformance = getRunningPerformanceSummary(state);
+  const runningBests = getAutoDetectedRunningBests(state);
 
   function promptUpdateTask(taskId: string, title: string, dueDate: string) {
     const nextTitle = window.prompt("Edit task", title);
@@ -54,6 +60,15 @@ export function ProgressScreen() {
     actions.updateLanguageLog(logId, parsed, nextNote);
   }
 
+  function promptUpdateSubjectLog(logId: string, minutes: number, note?: string) {
+    const nextMinutes = window.prompt("Edit minutes", String(minutes));
+    if (!nextMinutes) return;
+    const parsed = Number(nextMinutes);
+    if (!Number.isFinite(parsed) || parsed <= 0) return;
+    const nextNote = window.prompt("Edit note", note ?? "") ?? undefined;
+    actions.updateSubjectLog(logId, parsed, nextNote);
+  }
+
   function promptUpdateMovementLog(logId: string, activity: string, duration: number, note?: string) {
     const nextActivity = window.prompt("Edit activity", activity);
     if (!nextActivity) return;
@@ -73,6 +88,16 @@ export function ProgressScreen() {
     const nextDate = window.prompt("Edit date (YYYY-MM-DD)", date);
     if (!nextDate) return;
     actions.updateWeightEntry(entryId, parsed, nextDate as DateKey);
+  }
+
+  function promptUpdateWaist(entryId: string, inchesValue: number, date: string) {
+    const nextInches = window.prompt("Edit waist inches", String(inchesValue));
+    if (!nextInches) return;
+    const parsed = Number(nextInches);
+    if (!Number.isFinite(parsed) || parsed <= 0) return;
+    const nextDate = window.prompt("Edit date (YYYY-MM-DD)", date);
+    if (!nextDate) return;
+    actions.updateWaistEntry(entryId, parsed, nextDate as DateKey);
   }
 
   function promptUpdateRunning(logId: string, run: typeof state.runningLogs[number]) {
@@ -162,7 +187,7 @@ export function ProgressScreen() {
             <MetricCard label="Overall streak" value={`${getOverallStreak(state)} days`} />
             <MetricCard label="Habits active" value={`${state.habits.length}`} />
             <MetricCard label="Study this week" value={`${getWeeklyLanguageMinutes(state)} min`} />
-            <MetricCard label="Soccer this week" value={`${getWeeklyMovementCount(state)}`} hint="Sessions" />
+            <MetricCard label="Activity this week" value={`${getWeeklyMovementCount(state)}`} hint="Sessions" />
             <MetricCard label="Runs this week" value={`${running.runCount}`} hint={`${running.totalDistanceMiles.toFixed(1)} mi`} />
             <MetricCard label="Longest run" value={`${running.longestRunMiles.toFixed(1)} mi`} hint={running.averagePace ?? "No pace yet"} />
             <MetricCard
@@ -171,6 +196,13 @@ export function ProgressScreen() {
                 weight.delta !== undefined ? `${weight.delta > 0 ? "+" : ""}${weight.delta.toFixed(1)}` : "--"
               }
               hint={weight.start !== undefined ? `From ${weight.start}` : "Set a starting weight"}
+            />
+            <MetricCard
+              label="Waist change"
+              value={
+                waist.delta !== undefined ? `${waist.delta > 0 ? "+" : ""}${waist.delta.toFixed(1)}"` : '--'
+              }
+              hint={waist.start !== undefined ? `From ${waist.start}"` : "Set a starting waist"}
             />
             <MetricCard label="Tasks this week" value={`${getWeeklyTaskCount(state)}`} />
           </div>
@@ -198,6 +230,24 @@ export function ProgressScreen() {
                   >
                     Reset
                   </PillButton>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <SectionTitle title="Subject totals" subtitle="School study summaries alongside language work." />
+          <div className="space-y-3">
+            {subjectSummaries.map((subject) => (
+              <Card key={subject.id}>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-lg font-semibold tracking-[-0.03em] text-white">{subject.name}</p>
+                    <p className="mt-1 text-sm text-muted/90">
+                      {subject.todayMinutes} min today • {subject.weekMinutes} min this week
+                    </p>
+                  </div>
                 </div>
               </Card>
             ))}
@@ -296,6 +346,60 @@ export function ProgressScreen() {
         </section>
 
         <section>
+          <SectionTitle
+            title="Running bests"
+            subtitle="Automatically detected from your logged run history."
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <MetricCard
+              label="Longest run"
+              value={
+                runningBests.longestRun
+                  ? `${runningBests.longestRun.distance} ${runningBests.preferredUnit}`
+                  : "--"
+              }
+              hint={runningBests.longestRun?.date ?? "No runs yet"}
+            />
+            <MetricCard
+              label="Fastest avg pace"
+              value={
+                runningBests.fastestAveragePace
+                  ? `${formatDurationSeconds(Math.round(runningBests.fastestAveragePace.duration / runningBests.fastestAveragePace.distance))}/${runningBests.fastestAveragePace.unit}`
+                  : "--"
+              }
+              hint={
+                runningBests.fastestAveragePace
+                  ? `${runningBests.fastestAveragePace.distance} ${runningBests.fastestAveragePace.unit} • ${runningBests.fastestAveragePace.date}`
+                  : "No pace-worthy runs yet"
+              }
+            />
+            <MetricCard
+              label="Best mile+"
+              value={
+                runningBests.bestMile
+                  ? formatDurationSeconds(runningBests.bestMile.duration)
+                  : "--"
+              }
+              hint={
+                runningBests.bestMile
+                  ? `${runningBests.bestMile.distance} ${runningBests.bestMile.unit} • ${runningBests.bestMile.date}`
+                  : "Need a 1 mile+ run"
+              }
+            />
+            <MetricCard
+              label="Best 5K"
+              value={runningBests.best5k ? formatDurationSeconds(runningBests.best5k.duration) : "--"}
+              hint={runningBests.best5k?.date ?? "No logged 5K yet"}
+            />
+            <MetricCard
+              label="Best 10K"
+              value={runningBests.best10k ? formatDurationSeconds(runningBests.best10k.duration) : "--"}
+              hint={runningBests.best10k?.date ?? "No logged 10K yet"}
+            />
+          </div>
+        </section>
+
+        <section>
           <SectionTitle title="Weight trend" subtitle="A calmer, roomier view of the long arc." />
           <Card className="h-80 border-blue-400/12">
             {weight.chartData.length > 1 ? (
@@ -318,6 +422,34 @@ export function ProgressScreen() {
             ) : (
               <div className="flex h-full items-center justify-center text-center text-sm text-muted/85">
                 Add at least two weight entries to see the trend line.
+              </div>
+            )}
+          </Card>
+        </section>
+
+        <section>
+          <SectionTitle title="Waist trend" subtitle="Track your waistline with the same quiet consistency." />
+          <Card className="h-80 border-blue-400/12">
+            {waist.chartData.length > 1 ? (
+              <ResponsiveContainer height="100%" width="100%">
+                <LineChart data={waist.chartData} margin={{ top: 16, right: 8, left: -20, bottom: 8 }}>
+                  <CartesianGrid stroke="rgba(141,164,196,0.1)" vertical={false} />
+                  <XAxis dataKey="date" stroke="#8da4c4" tickLine={false} axisLine={false} />
+                  <YAxis stroke="#8da4c4" tickLine={false} axisLine={false} domain={["dataMin - 1", "dataMax + 1"]} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "rgba(19,35,58,0.96)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: 18,
+                      color: "#e8f0ff",
+                    }}
+                  />
+                  <Line dataKey="inches" stroke="#60a5fa" strokeWidth={3.5} dot={{ fill: "#93c5fd", r: 4 }} type="monotone" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-center text-sm text-muted/85">
+                Add at least two waist entries to see the trend line.
               </div>
             )}
           </Card>
@@ -456,7 +588,34 @@ export function ProgressScreen() {
             </div>
 
             <div>
-              <p className="text-sm font-medium text-white">Recent movement logs</p>
+              <p className="text-sm font-medium text-white">Recent subject logs</p>
+              <div className="mt-3 space-y-3">
+                {state.subjectLogs.slice(0, 5).map((log) => (
+                  <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={log.id}>
+                    <p className="text-sm text-white">
+                      {state.subjects.find((subject) => subject.id === log.subjectId)?.name ?? "Subject"} • {log.minutes} min
+                    </p>
+                    <div className="mt-2 flex gap-3">
+                      <button className="text-xs text-blue-100/80" onClick={() => promptUpdateSubjectLog(log.id, log.minutes, log.note)} type="button">
+                        Edit
+                      </button>
+                      <button
+                        className="text-xs text-red-200"
+                        onClick={() => {
+                          if (window.confirm("Delete this subject log?")) actions.deleteSubjectLog(log.id);
+                        }}
+                        type="button"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-white">Recent activity logs</p>
               <div className="mt-3 space-y-3">
                 {state.movementLogs.slice(0, 5).map((log) => (
                   <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={log.id}>
@@ -533,6 +692,37 @@ export function ProgressScreen() {
                           className="text-xs text-red-200"
                           onClick={() => {
                             if (window.confirm("Delete this weight entry?")) actions.deleteWeightEntry(entry.id);
+                          }}
+                          type="button"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-white">Waist entries</p>
+              <div className="mt-3 space-y-3">
+                {state.waistLogs
+                  .slice()
+                  .sort((a, b) => b.date.localeCompare(a.date))
+                  .slice(0, 5)
+                  .map((entry) => (
+                    <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={entry.id}>
+                      <p className="text-sm text-white">
+                        {entry.inches}&quot; on {entry.date}
+                      </p>
+                      <div className="mt-2 flex gap-3">
+                        <button className="text-xs text-blue-100/80" onClick={() => promptUpdateWaist(entry.id, entry.inches, entry.date)} type="button">
+                          Edit
+                        </button>
+                        <button
+                          className="text-xs text-red-200"
+                          onClick={() => {
+                            if (window.confirm("Delete this waist entry?")) actions.deleteWaistEntry(entry.id);
                           }}
                           type="button"
                         >

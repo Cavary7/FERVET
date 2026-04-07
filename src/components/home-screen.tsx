@@ -11,11 +11,35 @@ import {
   getMottoForDate,
   getOverallStreak,
   getRunsForDay,
+  getSubjectMinutesForDay,
+  getSubjectSummaries,
+  getWaistSummary,
   getWeightSummary,
   getWeeklyRunningSummary,
+  isHabitCleanForDay,
 } from "@/lib/metrics";
 import { useAppStore } from "@/lib/store";
-import { Card, Input, MetricCard, PillButton, SectionTitle, Select, Shell, Textarea, Toggle } from "@/components/ui";
+import {
+  Card,
+  Input,
+  MetricCard,
+  PillButton,
+  SectionTitle,
+  Select,
+  Shell,
+  Textarea,
+  Toggle,
+} from "@/components/ui";
+
+function toDateTimeLocalInputValue(iso: string) {
+  const date = new Date(iso);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function toIsoFromLocalInput(value: string) {
+  return new Date(value).toISOString();
+}
 
 export function HomeScreen() {
   const { state, actions, now, hydrated } = useAppStore();
@@ -23,14 +47,18 @@ export function HomeScreen() {
   const [showRunningLogger, setShowRunningLogger] = useState(false);
   const [showHabits, setShowHabits] = useState(false);
   const [newLanguageName, setNewLanguageName] = useState("");
+  const [newSubjectName, setNewSubjectName] = useState("");
   const [newHabitName, setNewHabitName] = useState("");
-  const [newHabitStartDate, setNewHabitStartDate] = useState(today);
-  const [manualMinutes, setManualMinutes] = useState("20");
+  const [newHabitStartAt, setNewHabitStartAt] = useState(toDateTimeLocalInputValue(new Date().toISOString()));
+  const [languageManualMinutes, setLanguageManualMinutes] = useState("20");
   const [languageNote, setLanguageNote] = useState("");
+  const [subjectManualMinutes, setSubjectManualMinutes] = useState("30");
+  const [subjectNote, setSubjectNote] = useState("");
   const [activityName, setActivityName] = useState("soccer");
-  const [movementDuration, setMovementDuration] = useState("45");
-  const [movementNote, setMovementNote] = useState("");
+  const [activityDuration, setActivityDuration] = useState("45");
+  const [activityNote, setActivityNote] = useState("");
   const [weightInput, setWeightInput] = useState("");
+  const [waistInput, setWaistInput] = useState("");
   const [runDistance, setRunDistance] = useState("");
   const [runMinutes, setRunMinutes] = useState("");
   const [runSeconds, setRunSeconds] = useState("");
@@ -42,24 +70,37 @@ export function HomeScreen() {
   const selectedLanguageId = state.selectedLanguageId ?? state.languages[0]?.id;
   const selectedLanguage =
     state.languages.find((language) => language.id === selectedLanguageId) ?? state.languages[0];
+  const selectedSubjectId = state.selectedSubjectId ?? state.subjects[0]?.id;
+  const selectedSubject =
+    state.subjects.find((subject) => subject.id === selectedSubjectId) ?? state.subjects[0];
+
   const motto = useMemo(() => getMottoForDate(state, today), [state, today]);
   const daily = getDayCompletion(state, today);
   const overallStreak = getOverallStreak(state);
   const languageSummaries = getLanguageSummaries(state);
+  const subjectSummaries = getSubjectSummaries(state);
   const weight = getWeightSummary(state);
+  const waist = getWaistSummary(state);
   const runningWeek = getWeeklyRunningSummary(state);
   const runsToday = getRunsForDay(state, today);
   const completedTasksToday = state.tasks.filter(
     (task) => task.completedAt && new Date(task.completedAt).toISOString().slice(0, 10) === today,
   ).length;
 
-  const activeSessionMinutes = state.activeLanguageSession
+  const activeLanguageSessionMinutes = state.activeLanguageSession
     ? Math.max(
         1,
         Math.round((now - new Date(state.activeLanguageSession.startedAt).getTime()) / 60_000),
       )
     : 0;
+  const activeSubjectSessionMinutes = state.activeSubjectSession
+    ? Math.max(
+        1,
+        Math.round((now - new Date(state.activeSubjectSession.startedAt).getTime()) / 60_000),
+      )
+    : 0;
 
+  const cleanHabitsToday = daily.habit.statuses.filter((habit) => habit.clean === true).length;
   const progressItems = [
     {
       label: "Language",
@@ -67,7 +108,7 @@ export function HomeScreen() {
       complete: daily.languageMinutes >= 20,
     },
     {
-      label: "Movement",
+      label: "Activity",
       detail: daily.movementDone ? "Completed" : "Pending",
       complete: daily.movementDone,
     },
@@ -78,7 +119,7 @@ export function HomeScreen() {
     },
     {
       label: "Habits",
-      detail: `${daily.habit.statuses.filter((habit) => habit.clean).length}/${state.habits.length}`,
+      detail: `${cleanHabitsToday}/${state.habits.length}`,
       complete: daily.habit.complete,
     },
   ];
@@ -94,6 +135,17 @@ export function HomeScreen() {
     actions.deleteLanguage(languageId);
   }
 
+  function renameSubject(subjectId: string, currentName: string) {
+    const next = window.prompt("Rename subject", currentName);
+    if (!next) return;
+    actions.updateSubject(subjectId, next);
+  }
+
+  function deleteSubject(subjectId: string, name: string) {
+    if (!window.confirm(`Delete ${name}? This also removes its study logs.`)) return;
+    actions.deleteSubject(subjectId);
+  }
+
   function renameHabit(habitId: string, currentName: string) {
     const next = window.prompt("Rename habit", currentName);
     if (!next) return;
@@ -101,10 +153,14 @@ export function HomeScreen() {
   }
 
   function editHabitStartDate(habitId: string, currentIso: string) {
-    const currentDate = currentIso.slice(0, 10);
-    const next = window.prompt("Set clean start date (YYYY-MM-DD)", currentDate);
+    const next = window.prompt(
+      "Set clean start date and time (YYYY-MM-DDTHH:MM)",
+      toDateTimeLocalInputValue(currentIso),
+    );
     if (!next) return;
-    actions.updateHabitStartDate(habitId, next as typeof today);
+    const parsed = new Date(next);
+    if (Number.isNaN(parsed.getTime())) return;
+    actions.updateHabitStartDate(habitId, parsed.toISOString());
   }
 
   function deleteHabit(habitId: string, name: string) {
@@ -211,7 +267,7 @@ export function HomeScreen() {
         </section>
 
         <section>
-          <SectionTitle title="Languages" subtitle="Track several at once without losing speed." />
+          <SectionTitle title="Languages" subtitle="Keep multiple language tracks visible at once." />
           <Card>
             <div className="grid grid-cols-[1fr_auto] gap-3">
               <Input
@@ -265,6 +321,57 @@ export function HomeScreen() {
         </section>
 
         <section>
+          <SectionTitle title="Subjects" subtitle="Track school study alongside language work." />
+          <Card>
+            <div className="grid grid-cols-[1fr_auto] gap-3">
+              <Input
+                onChange={(event) => setNewSubjectName(event.target.value)}
+                placeholder="Add subject"
+                value={newSubjectName}
+              />
+              <PillButton
+                onClick={() => {
+                  actions.addSubject(newSubjectName);
+                  setNewSubjectName("");
+                }}
+              >
+                Add
+              </PillButton>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {subjectSummaries.map((subject) => {
+                const active = selectedSubjectId === subject.id;
+                return (
+                  <div
+                    className={`rounded-full border px-4 py-2 transition ${
+                      active
+                        ? "border-blue-400/30 bg-[linear-gradient(180deg,rgba(59,130,246,0.24),rgba(19,35,58,0.95))] text-white shadow-glow"
+                        : "border-white/8 bg-white/[0.04] text-muted"
+                    }`}
+                    key={subject.id}
+                  >
+                    <button className="text-left" onClick={() => actions.selectSubject(subject.id)} type="button">
+                      <span className="block text-sm font-medium">{subject.name}</span>
+                      <span className="block text-xs opacity-80">
+                        {subject.todayMinutes} today • {subject.weekMinutes} week
+                      </span>
+                    </button>
+                    <div className="mt-2 flex gap-2">
+                      <button className="text-[11px] text-blue-100/80" onClick={() => renameSubject(subject.id, subject.name)} type="button">
+                        Edit
+                      </button>
+                      <button className="text-[11px] text-red-200" onClick={() => deleteSubject(subject.id, subject.name)} type="button">
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </section>
+
+        <section>
           <SectionTitle title="Control panel" subtitle="Fast, tactile logging for the core trackers." />
           <div className="space-y-4">
             <Card className="border-blue-400/12">
@@ -273,7 +380,7 @@ export function HomeScreen() {
                   <p className="text-base font-medium text-white">Language study</p>
                   <p className="mt-1 text-sm text-muted/90">
                     {selectedLanguage?.name ?? "No language selected"}{" "}
-                    {activeSessionMinutes > 0 ? `• ${activeSessionMinutes} min live` : ""}
+                    {activeLanguageSessionMinutes > 0 ? `• ${activeLanguageSessionMinutes} min live` : ""}
                   </p>
                 </div>
                 <PillButton
@@ -296,10 +403,10 @@ export function HomeScreen() {
                   ))}
                 </Select>
                 <div className="grid grid-cols-[1fr_auto] gap-3">
-                  <Input min="1" onChange={(event) => setManualMinutes(event.target.value)} type="number" value={manualMinutes} />
+                  <Input min="1" onChange={(event) => setLanguageManualMinutes(event.target.value)} type="number" value={languageManualMinutes} />
                   <PillButton
                     onClick={() => {
-                      const minutes = Number(manualMinutes);
+                      const minutes = Number(languageManualMinutes);
                       if (!selectedLanguage || !Number.isFinite(minutes) || minutes <= 0) return;
                       actions.addLanguageMinutes(selectedLanguage.id, minutes, today, languageNote);
                       setLanguageNote("");
@@ -312,20 +419,65 @@ export function HomeScreen() {
               </div>
             </Card>
 
+            <Card className="border-blue-400/12">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-base font-medium text-white">Subject study</p>
+                  <p className="mt-1 text-sm text-muted/90">
+                    {selectedSubject?.name ?? "No subject selected"}{" "}
+                    {activeSubjectSessionMinutes > 0 ? `• ${activeSubjectSessionMinutes} min live` : ""}
+                  </p>
+                </div>
+                <PillButton
+                  onClick={() =>
+                    state.activeSubjectSession
+                      ? actions.stopSubjectSession(subjectNote)
+                      : selectedSubject && actions.startSubjectSession(selectedSubject.id)
+                  }
+                  disabled={!selectedSubject}
+                >
+                  {state.activeSubjectSession ? "Stop timer" : "Start timer"}
+                </PillButton>
+              </div>
+              <div className="mt-4 grid gap-3">
+                <Select onChange={(event) => actions.selectSubject(event.target.value)} value={selectedSubjectId}>
+                  {state.subjects.map((subject) => (
+                    <option key={subject.id} value={subject.id}>
+                      {subject.name}
+                    </option>
+                  ))}
+                </Select>
+                <div className="grid grid-cols-[1fr_auto] gap-3">
+                  <Input min="1" onChange={(event) => setSubjectManualMinutes(event.target.value)} type="number" value={subjectManualMinutes} />
+                  <PillButton
+                    onClick={() => {
+                      const minutes = Number(subjectManualMinutes);
+                      if (!selectedSubject || !Number.isFinite(minutes) || minutes <= 0) return;
+                      actions.addSubjectMinutes(selectedSubject.id, minutes, today, subjectNote);
+                      setSubjectNote("");
+                    }}
+                  >
+                    Log
+                  </PillButton>
+                </div>
+                <Textarea onChange={(event) => setSubjectNote(event.target.value)} placeholder="Optional note" value={subjectNote} />
+              </div>
+            </Card>
+
             <div className="grid grid-cols-2 gap-3">
               <Card>
                 <p className="text-base font-medium text-white">Activity</p>
                 <p className="mt-1 text-sm text-muted/90">Log any training, exercise, or physical activity.</p>
                 <div className="mt-4 space-y-3">
                   <Input onChange={(event) => setActivityName(event.target.value)} placeholder="Activity name" value={activityName} />
-                  <Input min="1" onChange={(event) => setMovementDuration(event.target.value)} type="number" value={movementDuration} />
-                  <Textarea onChange={(event) => setMovementNote(event.target.value)} placeholder="Optional note" value={movementNote} />
+                  <Input min="1" onChange={(event) => setActivityDuration(event.target.value)} type="number" value={activityDuration} />
+                  <Textarea onChange={(event) => setActivityNote(event.target.value)} placeholder="Optional note" value={activityNote} />
                   <PillButton
                     onClick={() => {
-                      const duration = Number(movementDuration);
+                      const duration = Number(activityDuration);
                       if (!Number.isFinite(duration) || duration <= 0) return;
-                      actions.addMovementLog(activityName || "activity", duration, movementNote);
-                      setMovementNote("");
+                      actions.addMovementLog(activityName || "activity", duration, activityNote);
+                      setActivityNote("");
                     }}
                   >
                     Log activity
@@ -334,8 +486,8 @@ export function HomeScreen() {
               </Card>
 
               <Card>
-                <p className="text-base font-medium text-white">Weight check-in</p>
-                <p className="mt-1 text-sm text-muted/90">Quietly track the long arc.</p>
+                <p className="text-base font-medium text-white">Body metrics</p>
+                <p className="mt-1 text-sm text-muted/90">Track weight and waist without adding noise.</p>
                 <div className="mt-4 space-y-3">
                   <Input inputMode="decimal" onChange={(event) => setWeightInput(event.target.value)} placeholder="Current weight" value={weightInput} />
                   <PillButton
@@ -347,7 +499,20 @@ export function HomeScreen() {
                       setWeightInput("");
                     }}
                   >
-                    Save
+                    Save weight
+                  </PillButton>
+                  <Input inputMode="decimal" onChange={(event) => setWaistInput(event.target.value)} placeholder="Waist (inches)" value={waistInput} />
+                  <PillButton
+                    onClick={() => {
+                      const value = Number(waistInput);
+                      if (!Number.isFinite(value) || value <= 0) return;
+                      if (state.waistStart === undefined) actions.setWaistStart(value);
+                      actions.addWaistEntry(value);
+                      setWaistInput("");
+                    }}
+                    variant="ghost"
+                  >
+                    Save waist
                   </PillButton>
                 </div>
               </Card>
@@ -387,12 +552,10 @@ export function HomeScreen() {
                   </div>
                   <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-2">
                     <p className="text-xs text-muted/80">
-                      Duration preview: {formatDurationSeconds((Number(runMinutes || "0") * 60) + Number(runSeconds || "0"))}
+                      Duration preview: {formatDurationSeconds(Number(runMinutes || "0") * 60 + Number(runSeconds || "0"))}
                     </p>
                   </div>
-                  <div className="grid grid-cols-1 gap-3">
-                    <Input onChange={(event) => setRunPace(event.target.value)} placeholder="Pace (optional)" value={runPace} />
-                  </div>
+                  <Input onChange={(event) => setRunPace(event.target.value)} placeholder="Pace (optional)" value={runPace} />
                   <Select onChange={(event) => setRunType(event.target.value)} value={runType}>
                     {RUN_TYPES.map((type) => (
                       <option key={type} value={type}>
@@ -417,7 +580,7 @@ export function HomeScreen() {
         <section>
           <SectionTitle
             title="Habits / sobriety"
-            subtitle="Each tracker keeps its own history and timer."
+            subtitle="Each tracker keeps its own history and exact clean-start timer."
             action={
               <PillButton onClick={() => setShowHabits((current) => !current)} variant="ghost">
                 {showHabits ? "Collapse" : "Expand"}
@@ -427,12 +590,13 @@ export function HomeScreen() {
           <Card>
             <div className="grid gap-3">
               <Input onChange={(event) => setNewHabitName(event.target.value)} placeholder="Add habit" value={newHabitName} />
-              <Input onChange={(event) => setNewHabitStartDate(event.target.value as typeof today)} type="date" value={newHabitStartDate} />
+              <Input onChange={(event) => setNewHabitStartAt(event.target.value)} type="datetime-local" value={newHabitStartAt} />
               <PillButton
                 onClick={() => {
-                  actions.addHabit(newHabitName, newHabitStartDate as typeof today);
+                  if (!newHabitName.trim()) return;
+                  actions.addHabit(newHabitName, toIsoFromLocalInput(newHabitStartAt));
                   setNewHabitName("");
-                  setNewHabitStartDate(today);
+                  setNewHabitStartAt(toDateTimeLocalInputValue(new Date().toISOString()));
                 }}
               >
                 Add
@@ -440,60 +604,70 @@ export function HomeScreen() {
             </div>
             {showHabits ? (
               <div className="mt-4 space-y-3">
-                {state.habits.map((habit) => (
-                  <div
-                    className="rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(8,17,31,0.5))] p-4"
-                    key={habit.id}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-base font-medium text-white">{habit.name}</p>
-                        <p className="mt-1 text-sm text-blue-100/72">
-                          {hydrated ? formatTimeSince(habit.currentStartAt, now) : "--"}
-                        </p>
+                {state.habits.map((habit) => {
+                  const cleanToday = isHabitCleanForDay(habit, today) === true;
+                  const lastReset = habit.resets[0]?.timestamp;
+                  return (
+                    <div
+                      className="rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(8,17,31,0.5))] p-4"
+                      key={habit.id}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-base font-medium text-white">{habit.name}</p>
+                          <p className="mt-1 text-sm text-blue-100/72">
+                            {hydrated ? formatTimeSince(habit.currentStartAt, now) : "--"}
+                          </p>
+                          <p className="mt-1 text-xs text-muted/75">
+                            Start {new Date(habit.currentStartAt).toLocaleString()}
+                          </p>
+                          {lastReset ? (
+                            <p className="mt-1 text-xs text-muted/70">
+                              Last reset {new Date(lastReset).toLocaleString()}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="flex gap-2">
+                          <PillButton onClick={() => renameHabit(habit.id, habit.name)} variant="ghost">
+                            Edit
+                          </PillButton>
+                          <PillButton onClick={() => editHabitStartDate(habit.id, habit.currentStartAt)} variant="ghost">
+                            Start
+                          </PillButton>
+                          <PillButton onClick={() => actions.resetHabit(habit.id)} variant="danger">
+                            Reset
+                          </PillButton>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <PillButton onClick={() => renameHabit(habit.id, habit.name)} variant="ghost">
-                          Edit
-                        </PillButton>
-                        <PillButton onClick={() => editHabitStartDate(habit.id, habit.currentStartAt)} variant="ghost">
-                          Start
-                        </PillButton>
-                        <PillButton onClick={() => actions.resetHabit(habit.id)} variant="danger">
-                          Reset
-                        </PillButton>
+                      <div className="mt-4 grid grid-cols-2 gap-3">
+                        <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-blue-100/45">Streak</p>
+                          <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
+                            {getHabitStreak(habit)}d
+                          </p>
+                        </div>
+                        <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-blue-100/45">History</p>
+                          <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
+                            {habit.resets.length}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-4">
+                        <Toggle
+                          checked={cleanToday}
+                          label="Clean today?"
+                          onClick={() => actions.toggleHabitDay(habit.id, today, !cleanToday)}
+                        />
+                      </div>
+                      <div className="mt-3 flex justify-end">
+                        <button className="text-xs text-red-200" onClick={() => deleteHabit(habit.id, habit.name)} type="button">
+                          Delete habit
+                        </button>
                       </div>
                     </div>
-                    <div className="mt-4 grid grid-cols-2 gap-3">
-                      <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-blue-100/45">Streak</p>
-                        <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
-                          {getHabitStreak(habit)}d
-                        </p>
-                      </div>
-                      <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-blue-100/45">History</p>
-                        <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
-                          {habit.resets.length}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <Toggle
-                        checked={habit.cleanDays[today] ?? false}
-                        label="Clean today?"
-                        onClick={() =>
-                          actions.toggleHabitDay(habit.id, today, !(habit.cleanDays[today] ?? false))
-                        }
-                      />
-                    </div>
-                    <div className="mt-3 flex justify-end">
-                      <button className="text-xs text-red-200" onClick={() => deleteHabit(habit.id, habit.name)} type="button">
-                        Delete habit
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="mt-4 rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3">
@@ -510,15 +684,25 @@ export function HomeScreen() {
           <SectionTitle title="Today at a glance" />
           <div className="grid grid-cols-2 gap-3">
             <MetricCard label="Language" value={`${getLanguageMinutesForDay(state, today)} min`} />
-            <MetricCard label="Movement" value={`${state.movementLogs.filter((entry) => entry.date === today).length}`} hint="Sessions today" />
+            <MetricCard label="Subjects" value={`${getSubjectMinutesForDay(state, today)} min`} />
+            <MetricCard label="Activity" value={`${state.movementLogs.filter((entry) => entry.date === today).length}`} hint="Sessions today" />
             <MetricCard label="Running" value={`${runsToday.length}`} hint="Runs today" />
-            <MetricCard label="Habits" value={`${daily.habit.statuses.filter((habit) => habit.clean).length}/${state.habits.length}`} />
+            <MetricCard label="Habits" value={`${cleanHabitsToday}/${state.habits.length}`} />
             <MetricCard
               label="Weight"
               value={weight.current ? `${weight.current}` : "--"}
               hint={
                 weight.delta !== undefined
                   ? `${weight.delta > 0 ? "+" : ""}${weight.delta.toFixed(1)} from start`
+                  : "No baseline yet"
+              }
+            />
+            <MetricCard
+              label="Waist"
+              value={waist.current ? `${waist.current}"` : "--"}
+              hint={
+                waist.delta !== undefined
+                  ? `${waist.delta > 0 ? "+" : ""}${waist.delta.toFixed(1)} from start`
                   : "No baseline yet"
               }
             />

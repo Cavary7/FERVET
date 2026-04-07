@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import { DEFAULT_MOTTOES } from "@/lib/constants";
-import { addDaysToKey, fromDateKey, todayKey } from "@/lib/date";
+import { addDaysToKey, fromDateKey, todayKey, toDateKey } from "@/lib/date";
 import { loadState, saveState, STORAGE_KEY } from "@/lib/storage";
 import {
   AppState,
@@ -23,7 +23,10 @@ import {
   RunningLog,
   RunningPr,
   RunUnit,
+  Subject,
+  SubjectLog,
   Task,
+  WaistLog,
   WeightLog,
 } from "@/lib/types";
 
@@ -51,16 +54,25 @@ function createDefaultLanguage(name = "Mandarin"): Language {
   };
 }
 
-function createDefaultHabit(name = "Habit maintained", startDateKey = todayKey()): Habit {
+function createDefaultSubject(name = "Precalculus"): Subject {
+  return {
+    id: createId("subject"),
+    name,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function createDefaultHabit(name = "Habit maintained", startAt = new Date().toISOString()): Habit {
+  const startDateKey = toDateKey(new Date(startAt));
   return {
     id: createId("habit"),
     name,
     createdAt: new Date().toISOString(),
+    trackingStartedAt: startAt,
     cleanDays: {
-      [todayKey()]: true,
       [startDateKey]: true,
     },
-    currentStartAt: isoFromDateKey(startDateKey),
+    currentStartAt: startAt,
     resets: [],
   };
 }
@@ -85,6 +97,7 @@ function getNextDueDate(dateKey: DateKey, recurrence: "daily" | "weekly" | "mont
 function ensureRecurringTasks(tasks: Task[]) {
   const result = [...tasks];
   const groups = new Map<string, Task[]>();
+  const horizon = addDaysToKey(todayKey(), 90);
 
   result.forEach((task) => {
     if (task.recurringTaskId && task.recurrence) {
@@ -99,11 +112,12 @@ function ensureRecurringTasks(tasks: Task[]) {
     const latest = [...entries].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).at(-1);
     if (!latest) return;
 
-    const hasOpenTask = entries.some((task) => !task.completedAt);
+    const openDates = new Set(entries.filter((task) => !task.completedAt).map((task) => task.dueDate));
     let cursor = latest.dueDate;
 
-    while (!hasOpenTask && cursor < todayKey()) {
+    while (cursor < horizon) {
       cursor = getNextDueDate(cursor, recurrence);
+      if (openDates.has(cursor)) continue;
       result.push({
         ...latest,
         id: createId("task"),
@@ -119,17 +133,23 @@ function ensureRecurringTasks(tasks: Task[]) {
 
 function createDefaultState(): AppState {
   const language = createDefaultLanguage();
+  const subject = createDefaultSubject();
   return {
     mottoes: createDefaultMottoes(),
     mottoRotationMode: "cycle",
     languages: [language],
+    subjects: [subject],
     selectedLanguageId: language.id,
+    selectedSubjectId: subject.id,
     languageLogs: [],
+    subjectLogs: [],
     movementLogs: [],
+    activeSubjectSession: undefined,
     runningDurationVersion: 2,
     runningLogs: [],
     runningPrs: [],
     weightLogs: [],
+    waistLogs: [],
     tasks: [],
     habits: [createDefaultHabit()],
   };
@@ -171,8 +191,33 @@ function normalizeWeightLogs(raw: Record<string, unknown>) {
   return Array.isArray(raw.weightLogs) ? (raw.weightLogs as WeightLog[]) : [];
 }
 
+function normalizeWaistLogs(raw: Record<string, unknown>) {
+  return Array.isArray(raw.waistLogs) ? (raw.waistLogs as WaistLog[]) : [];
+}
+
 function normalizeTasks(raw: Record<string, unknown>) {
-  return Array.isArray(raw.tasks) ? (raw.tasks as Task[]) : [];
+  return Array.isArray(raw.tasks)
+    ? raw.tasks
+        .map((entry) => {
+          const current = entry as Partial<Task>;
+          if (!current.dueDate) return null;
+          return {
+            id: current.id ?? createId("task"),
+            title: current.title ?? "Task",
+            dueDate: current.dueDate,
+            createdAt: current.createdAt ?? new Date().toISOString(),
+            completedAt: current.completedAt,
+            recurrence:
+              current.recurrence === "daily" ||
+              current.recurrence === "weekly" ||
+              current.recurrence === "monthly"
+                ? current.recurrence
+                : undefined,
+            recurringTaskId: current.recurringTaskId,
+          };
+        })
+        .filter((task): task is NonNullable<typeof task> => Boolean(task))
+    : [];
 }
 
 function normalizeRunningLogs(raw: Record<string, unknown>): RunningLog[] {
@@ -226,11 +271,21 @@ function normalizeState(input: unknown): AppState {
       : [createDefaultLanguage(typeof raw.languageLabel === "string" ? raw.languageLabel : "Mandarin")];
 
   const primaryLanguageId = languages[0].id;
+  const subjects =
+    Array.isArray(raw.subjects) && raw.subjects.length > 0
+      ? (raw.subjects as Subject[])
+      : fallback.subjects;
+  const primarySubjectId = subjects[0].id;
   const selectedLanguageId =
     typeof raw.selectedLanguageId === "string" &&
     languages.some((language) => language.id === raw.selectedLanguageId)
       ? raw.selectedLanguageId
       : primaryLanguageId;
+  const selectedSubjectId =
+    typeof raw.selectedSubjectId === "string" &&
+    subjects.some((subject) => subject.id === raw.selectedSubjectId)
+      ? raw.selectedSubjectId
+      : primarySubjectId;
 
   const languageLogs: LanguageLog[] = Array.isArray(raw.languageLogs)
     ? raw.languageLogs.map((log) => {
@@ -242,6 +297,25 @@ function normalizeState(input: unknown): AppState {
             languages.some((language) => language.id === current.languageId)
               ? current.languageId
               : primaryLanguageId,
+          date: (current.date ?? todayKey()) as DateKey,
+          minutes: typeof current.minutes === "number" ? current.minutes : 0,
+          note: current.note,
+          createdAt: current.createdAt ?? new Date().toISOString(),
+          source: current.source === "timer" ? "timer" : "manual",
+        };
+      })
+    : [];
+
+  const subjectLogs: SubjectLog[] = Array.isArray(raw.subjectLogs)
+    ? raw.subjectLogs.map((log) => {
+        const current = log as Partial<SubjectLog>;
+        return {
+          id: current.id ?? createId("subject-log"),
+          subjectId:
+            typeof current.subjectId === "string" &&
+            subjects.some((subject) => subject.id === current.subjectId)
+              ? current.subjectId
+              : primarySubjectId,
           date: (current.date ?? todayKey()) as DateKey,
           minutes: typeof current.minutes === "number" ? current.minutes : 0,
           note: current.note,
@@ -263,16 +337,33 @@ function normalizeState(input: unknown): AppState {
             startedAt: raw.activeLanguageSessionStartedAt,
           }
         : undefined;
+  const activeSubjectSession =
+    raw.activeSubjectSession &&
+    typeof raw.activeSubjectSession === "object" &&
+    typeof (raw.activeSubjectSession as { startedAt?: unknown }).startedAt === "string" &&
+    typeof (raw.activeSubjectSession as { subjectId?: unknown }).subjectId === "string"
+      ? (raw.activeSubjectSession as AppState["activeSubjectSession"])
+      : undefined;
 
   const habits =
     Array.isArray(raw.habits) && raw.habits.length > 0
-      ? (raw.habits as Habit[])
+      ? (raw.habits as Habit[]).map((habit) => ({
+          ...habit,
+          trackingStartedAt: habit.trackingStartedAt ?? habit.currentStartAt ?? new Date().toISOString(),
+          currentStartAt: habit.currentStartAt ?? habit.trackingStartedAt ?? new Date().toISOString(),
+          cleanDays: habit.cleanDays ?? {},
+          resets: Array.isArray(habit.resets) ? habit.resets : [],
+        }))
       : raw.habit && typeof raw.habit === "object"
         ? [
             {
               id: createId("habit"),
               name: "Habit maintained",
               createdAt: new Date().toISOString(),
+              trackingStartedAt:
+                (raw.habit as { trackingStartedAt?: string; currentStartAt?: string }).trackingStartedAt ??
+                (raw.habit as { currentStartAt?: string }).currentStartAt ??
+                new Date().toISOString(),
               cleanDays:
                 (raw.habit as { cleanDays?: Record<DateKey, boolean> }).cleanDays ?? {
                   [todayKey()]: true,
@@ -292,15 +383,21 @@ function normalizeState(input: unknown): AppState {
     mottoes: normalizeMottoes(raw),
     mottoRotationMode,
     languages,
+    subjects,
     selectedLanguageId,
+    selectedSubjectId,
     languageLogs,
+    subjectLogs,
     activeLanguageSession,
+    activeSubjectSession,
     movementLogs: normalizeMovementLogs(raw),
     runningDurationVersion: 2,
     runningLogs: normalizeRunningLogs(raw),
     runningPrs: normalizeRunningPrs(raw),
     weightStart: typeof raw.weightStart === "number" ? raw.weightStart : undefined,
     weightLogs: normalizeWeightLogs(raw),
+    waistStart: typeof raw.waistStart === "number" ? raw.waistStart : undefined,
+    waistLogs: normalizeWaistLogs(raw),
     tasks: ensureRecurringTasks(normalizeTasks(raw)),
     habits,
   };
@@ -321,9 +418,18 @@ type StoreContextValue = {
     addLanguageMinutes: (languageId: string, minutes: number, dateKey?: DateKey, note?: string) => void;
     updateLanguageLog: (logId: string, minutes: number, note?: string) => void;
     deleteLanguageLog: (logId: string) => void;
-    addHabit: (name: string, startDateKey?: DateKey) => void;
+    addSubject: (name: string) => void;
+    updateSubject: (subjectId: string, name: string) => void;
+    deleteSubject: (subjectId: string) => void;
+    selectSubject: (subjectId: string) => void;
+    startSubjectSession: (subjectId: string) => void;
+    stopSubjectSession: (note?: string) => void;
+    addSubjectMinutes: (subjectId: string, minutes: number, dateKey?: DateKey, note?: string) => void;
+    updateSubjectLog: (logId: string, minutes: number, note?: string) => void;
+    deleteSubjectLog: (logId: string) => void;
+    addHabit: (name: string, startAt?: string) => void;
     updateHabit: (habitId: string, name: string) => void;
-    updateHabitStartDate: (habitId: string, dateKey: DateKey) => void;
+    updateHabitStartDate: (habitId: string, isoTimestamp: string) => void;
     deleteHabit: (habitId: string) => void;
     toggleHabitDay: (habitId: string, dateKey: DateKey, value: boolean) => void;
     resetHabit: (habitId: string) => void;
@@ -349,6 +455,10 @@ type StoreContextValue = {
     updateWeightEntry: (entryId: string, weight: number, dateKey?: DateKey) => void;
     deleteWeightEntry: (entryId: string) => void;
     setWeightStart: (weight: number) => void;
+    addWaistEntry: (inches: number, dateKey?: DateKey) => void;
+    updateWaistEntry: (entryId: string, inches: number, dateKey?: DateKey) => void;
+    deleteWaistEntry: (entryId: string) => void;
+    setWaistStart: (inches: number) => void;
     addTask: (title: string, dueDate: DateKey, recurrence?: Task["recurrence"]) => void;
     updateTask: (taskId: string, title: string, dueDate: DateKey, recurrence?: Task["recurrence"]) => void;
     deleteTask: (taskId: string) => void;
@@ -512,12 +622,121 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           languageLogs: current.languageLogs.filter((log) => log.id !== logId),
         }));
       },
-      addHabit(name: string, startDateKey = todayKey()) {
+      addSubject(name: string) {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        const subject = createDefaultSubject(trimmed);
+        setState((current) => ({
+          ...current,
+          subjects: [...current.subjects, subject],
+          selectedSubjectId: subject.id,
+        }));
+      },
+      updateSubject(subjectId: string, name: string) {
         const trimmed = name.trim();
         if (!trimmed) return;
         setState((current) => ({
           ...current,
-          habits: [...current.habits, createDefaultHabit(trimmed, startDateKey)],
+          subjects: current.subjects.map((subject) =>
+            subject.id === subjectId ? { ...subject, name: trimmed } : subject,
+          ),
+        }));
+      },
+      deleteSubject(subjectId: string) {
+        setState((current) => {
+          const remaining = current.subjects.filter((subject) => subject.id !== subjectId);
+          const nextSubjects = remaining.length > 0 ? remaining : [createDefaultSubject()];
+          return {
+            ...current,
+            subjects: nextSubjects,
+            selectedSubjectId:
+              current.selectedSubjectId === subjectId ? nextSubjects[0].id : current.selectedSubjectId,
+            subjectLogs: current.subjectLogs.filter((log) => log.subjectId !== subjectId),
+            activeSubjectSession:
+              current.activeSubjectSession?.subjectId === subjectId
+                ? undefined
+                : current.activeSubjectSession,
+          };
+        });
+      },
+      selectSubject(subjectId: string) {
+        setState((current) => ({
+          ...current,
+          selectedSubjectId: subjectId,
+        }));
+      },
+      startSubjectSession(subjectId: string) {
+        setState((current) => ({
+          ...current,
+          selectedSubjectId: subjectId,
+          activeSubjectSession:
+            current.activeSubjectSession ?? {
+              subjectId,
+              startedAt: new Date().toISOString(),
+            },
+        }));
+      },
+      stopSubjectSession(note?: string) {
+        setState((current) => {
+          if (!current.activeSubjectSession) return current;
+          const elapsedMs = Date.now() - new Date(current.activeSubjectSession.startedAt).getTime();
+          const minutes = Math.max(1, Math.round(elapsedMs / 60_000));
+          return {
+            ...current,
+            activeSubjectSession: undefined,
+            subjectLogs: [
+              {
+                id: createId("subject-log"),
+                subjectId: current.activeSubjectSession.subjectId,
+                date: todayKey(),
+                minutes,
+                note,
+                createdAt: new Date().toISOString(),
+                source: "timer",
+              },
+              ...current.subjectLogs,
+            ],
+          };
+        });
+      },
+      addSubjectMinutes(subjectId: string, minutes: number, dateKey = todayKey(), note?: string) {
+        setState((current) => ({
+          ...current,
+          selectedSubjectId: subjectId,
+          subjectLogs: [
+            {
+              id: createId("subject-log"),
+              subjectId,
+              date: dateKey,
+              minutes,
+              note,
+              createdAt: new Date().toISOString(),
+              source: "manual",
+            },
+            ...current.subjectLogs,
+          ],
+        }));
+      },
+      updateSubjectLog(logId: string, minutes: number, note?: string) {
+        setState((current) => ({
+          ...current,
+          subjectLogs: current.subjectLogs.map((log) =>
+            log.id === logId ? { ...log, minutes, note } : log,
+          ),
+        }));
+      },
+      deleteSubjectLog(logId: string) {
+        setState((current) => ({
+          ...current,
+          subjectLogs: current.subjectLogs.filter((log) => log.id !== logId),
+        }));
+      },
+      addHabit(name: string, startAt = new Date().toISOString()) {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        setState((current) => ({
+          ...current,
+          habits: [...current.habits, createDefaultHabit(trimmed, startAt)],
         }));
       },
       updateHabit(habitId: string, name: string) {
@@ -530,18 +749,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ),
         }));
       },
-      updateHabitStartDate(habitId: string, dateKey: DateKey) {
+      updateHabitStartDate(habitId: string, isoTimestamp: string) {
+        const isoDateKey = toDateKey(new Date(isoTimestamp));
         setState((current) => ({
           ...current,
           habits: current.habits.map((habit) =>
             habit.id === habitId
               ? {
                   ...habit,
-                  currentStartAt: isoFromDateKey(dateKey),
+                  trackingStartedAt: isoTimestamp,
+                  currentStartAt: isoTimestamp,
                   cleanDays: {
                     ...habit.cleanDays,
-                    [todayKey()]: true,
-                    [dateKey]: true,
+                    [isoDateKey]: true,
                   },
                 }
               : habit,
@@ -742,6 +962,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setState((current) => ({
           ...current,
           weightStart: weight,
+        }));
+      },
+      addWaistEntry(inches: number, dateKey = todayKey()) {
+        setState((current) => ({
+          ...current,
+          waistLogs: [
+            {
+              id: createId("waist"),
+              date: dateKey,
+              inches,
+              createdAt: new Date().toISOString(),
+            },
+            ...current.waistLogs.filter((entry) => entry.date !== dateKey),
+          ],
+        }));
+      },
+      updateWaistEntry(entryId: string, inches: number, dateKey?: DateKey) {
+        setState((current) => ({
+          ...current,
+          waistLogs: current.waistLogs.map((entry) =>
+            entry.id === entryId ? { ...entry, inches, date: dateKey ?? entry.date } : entry,
+          ),
+        }));
+      },
+      deleteWaistEntry(entryId: string) {
+        setState((current) => ({
+          ...current,
+          waistLogs: current.waistLogs.filter((entry) => entry.id !== entryId),
+        }));
+      },
+      setWaistStart(inches: number) {
+        setState((current) => ({
+          ...current,
+          waistStart: inches,
         }));
       },
       addTask(title: string, dueDate: DateKey, recurrence?: Task["recurrence"]) {

@@ -43,6 +43,12 @@ export function getLanguageMinutesForDay(state: AppState, dateKey: DateKey, lang
     .reduce((sum, log) => sum + log.minutes, 0);
 }
 
+export function getSubjectMinutesForDay(state: AppState, dateKey: DateKey, subjectId?: string) {
+  return state.subjectLogs
+    .filter((log) => log.date === dateKey && (!subjectId || log.subjectId === subjectId))
+    .reduce((sum, log) => sum + log.minutes, 0);
+}
+
 export function getMovementForDay(state: AppState, dateKey: DateKey) {
   return state.movementLogs.filter((log) => log.date === dateKey && log.completed);
 }
@@ -58,7 +64,17 @@ export function getCompletedTasksForDay(tasks: Task[], dateKey: DateKey) {
 }
 
 export function isHabitCleanForDay(habit: Habit, dateKey: DateKey) {
-  return habit.cleanDays[dateKey] ?? false;
+  if (dateKey < (habit.trackingStartedAt.slice(0, 10) as DateKey)) {
+    return null;
+  }
+  const resetOnDate = habit.resets.some((reset) => reset.timestamp.slice(0, 10) === dateKey);
+  if (resetOnDate) {
+    return false;
+  }
+  if (dateKey >= (habit.currentStartAt.slice(0, 10) as DateKey)) {
+    return habit.cleanDays[dateKey] ?? true;
+  }
+  return false;
 }
 
 export function getHabitStreak(habit: Habit) {
@@ -77,7 +93,7 @@ export function getDailyHabitStatus(state: AppState, dateKey: DateKey) {
 
   return {
     statuses,
-    complete: statuses.length > 0 && statuses.every((habit) => habit.clean),
+    complete: statuses.length > 0 && statuses.every((habit) => habit.clean === true),
   };
 }
 
@@ -135,6 +151,19 @@ export function getLanguageSummaries(state: AppState) {
   }));
 }
 
+export function getSubjectSummaries(state: AppState) {
+  const today = todayKey();
+  const { start, end } = getWeekRange();
+  const days = new Set(eachDayOfInterval(start, end).map(toDateKey));
+  return state.subjects.map((subject) => ({
+    ...subject,
+    todayMinutes: getSubjectMinutesForDay(state, today, subject.id),
+    weekMinutes: state.subjectLogs
+      .filter((log) => log.subjectId === subject.id && days.has(log.date))
+      .reduce((sum, log) => sum + log.minutes, 0),
+  }));
+}
+
 export function getWeeklyMovementCount(state: AppState) {
   const { start, end } = getWeekRange();
   const days = new Set(eachDayOfInterval(start, end).map(toDateKey));
@@ -171,6 +200,23 @@ export function getWeightSummary(state: AppState) {
     chartData: sorted.map((entry) => ({
       date: formatDateLabel(fromDateKey(entry.date)),
       weight: entry.weight,
+    })),
+  };
+}
+
+export function getWaistSummary(state: AppState) {
+  const sorted = [...state.waistLogs].sort((a, b) => a.date.localeCompare(b.date));
+  const current = sorted.at(-1)?.inches;
+  const start = state.waistStart;
+  const delta = start !== undefined && current !== undefined ? current - start : undefined;
+
+  return {
+    current,
+    start,
+    delta,
+    chartData: sorted.map((entry) => ({
+      date: formatDateLabel(fromDateKey(entry.date)),
+      inches: entry.inches,
     })),
   };
 }
@@ -305,5 +351,37 @@ export function getRunningPerformanceSummary(state: AppState) {
           date: longestLast30.date,
         }
       : undefined,
+  };
+}
+
+export function getAutoDetectedRunningBests(state: AppState) {
+  const preferredUnit = getRunningPerformanceSummary(state).preferredUnit;
+  const runs = [...state.runningLogs];
+  const byFastest = [...runs]
+    .filter((run) => run.distance > 0)
+    .sort((a, b) => a.duration / a.distance - b.duration / b.distance);
+
+  const exactDistance = (targetKm: number) =>
+    runs
+      .filter((run) => {
+        const km = run.unit === "km" ? run.distance : run.distance / 0.621371;
+        return Math.abs(km - targetKm) < 0.08;
+      })
+      .sort((a, b) => a.duration - b.duration)[0];
+
+  const bestMile = runs
+    .filter((run) => {
+      const miles = run.unit === "mi" ? run.distance : run.distance * 0.621371;
+      return miles >= 1;
+    })
+    .sort((a, b) => a.duration / a.distance - b.duration / b.distance)[0];
+
+  return {
+    preferredUnit,
+    longestRun: getRunningPerformanceSummary(state).longestEver,
+    fastestAveragePace: byFastest[0],
+    bestMile,
+    best5k: exactDistance(5),
+    best10k: exactDistance(10),
   };
 }
