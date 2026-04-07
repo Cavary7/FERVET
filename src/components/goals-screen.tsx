@@ -139,7 +139,7 @@ export function GoalsScreen() {
 
   return (
     <Shell>
-      <header className="mb-5">
+      <header className="mb-4">
         <p className="text-[11px] uppercase tracking-[0.28em] text-blue-200/65">Goals</p>
         <h1 className="mt-3 text-white">Aim at something measurable.</h1>
         <p className="mt-3 max-w-xs text-sm text-muted/90">
@@ -147,7 +147,7 @@ export function GoalsScreen() {
         </p>
       </header>
 
-      <div className="space-y-4 pb-2">
+      <div className="space-y-4 pb-4">
         <Card className="p-4">
           <SectionTitle title="Create goal" subtitle="Linked goals stay synced. Manual goals stay flexible." />
           <div className="space-y-3">
@@ -322,6 +322,7 @@ export function GoalsScreen() {
         </section>
       </div>
       <GoalEditSheet
+        key={editingGoal?.id ?? "goal-sheet"}
         goal={editingGoal}
         habits={state.habits}
         languages={state.languages}
