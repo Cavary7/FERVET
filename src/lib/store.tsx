@@ -82,6 +82,19 @@ function isoFromDateKey(dateKey: DateKey) {
   return fromDateKey(dateKey).toISOString();
 }
 
+function normalizeLoggedAt(dateKey: DateKey, loggedAt?: string, createdAt?: string) {
+  if (loggedAt && !Number.isNaN(new Date(loggedAt).getTime())) return loggedAt;
+  if (createdAt && !Number.isNaN(new Date(createdAt).getTime())) return createdAt;
+  return isoFromDateKey(dateKey);
+}
+
+function alignLoggedAtToDate(dateKey: DateKey, existingIso: string) {
+  const base = fromDateKey(dateKey);
+  const existing = new Date(existingIso);
+  base.setHours(existing.getHours(), existing.getMinutes(), existing.getSeconds(), existing.getMilliseconds());
+  return base.toISOString();
+}
+
 function createRecurringTaskId() {
   return createId("recurring-task");
 }
@@ -177,9 +190,11 @@ function normalizeMovementLogs(raw: Record<string, unknown>) {
   return Array.isArray(raw.movementLogs)
     ? raw.movementLogs.map((entry) => {
         const current = entry as Partial<MovementLog>;
+        const date = (current.date ?? todayKey()) as DateKey;
         return {
           id: current.id ?? createId("movement"),
-          date: (current.date ?? todayKey()) as DateKey,
+          date,
+          loggedAt: normalizeLoggedAt(date, current.loggedAt, current.createdAt),
           activity: current.activity ?? "soccer",
           duration: typeof current.duration === "number" ? current.duration : 0,
           note: current.note,
@@ -191,11 +206,35 @@ function normalizeMovementLogs(raw: Record<string, unknown>) {
 }
 
 function normalizeWeightLogs(raw: Record<string, unknown>) {
-  return Array.isArray(raw.weightLogs) ? (raw.weightLogs as WeightLog[]) : [];
+  return Array.isArray(raw.weightLogs)
+    ? raw.weightLogs.map((entry) => {
+        const current = entry as Partial<WeightLog>;
+        const date = (current.date ?? todayKey()) as DateKey;
+        return {
+          id: current.id ?? createId("weight"),
+          date,
+          loggedAt: normalizeLoggedAt(date, current.loggedAt, current.createdAt),
+          weight: typeof current.weight === "number" ? current.weight : 0,
+          createdAt: current.createdAt ?? new Date().toISOString(),
+        };
+      })
+    : [];
 }
 
 function normalizeWaistLogs(raw: Record<string, unknown>) {
-  return Array.isArray(raw.waistLogs) ? (raw.waistLogs as WaistLog[]) : [];
+  return Array.isArray(raw.waistLogs)
+    ? raw.waistLogs.map((entry) => {
+        const current = entry as Partial<WaistLog>;
+        const date = (current.date ?? todayKey()) as DateKey;
+        return {
+          id: current.id ?? createId("waist"),
+          date,
+          loggedAt: normalizeLoggedAt(date, current.loggedAt, current.createdAt),
+          inches: typeof current.inches === "number" ? current.inches : 0,
+          createdAt: current.createdAt ?? new Date().toISOString(),
+        };
+      })
+    : [];
 }
 
 function normalizeTasks(raw: Record<string, unknown>) {
@@ -287,9 +326,11 @@ function normalizeRunningLogs(raw: Record<string, unknown>): RunningLog[] {
   return Array.isArray(raw.runningLogs)
     ? raw.runningLogs.map((log) => {
         const current = log as Partial<RunningLog>;
+        const date = (current.date ?? todayKey()) as DateKey;
         return {
           id: current.id ?? createId("run"),
-          date: (current.date ?? todayKey()) as DateKey,
+          date,
+          loggedAt: normalizeLoggedAt(date, current.loggedAt, current.createdAt),
           distance: typeof current.distance === "number" ? current.distance : 0,
           unit: current.unit === "km" ? "km" : "mi",
           duration:
@@ -352,6 +393,7 @@ function normalizeState(input: unknown): AppState {
   const languageLogs: LanguageLog[] = Array.isArray(raw.languageLogs)
     ? raw.languageLogs.map((log) => {
         const current = log as Partial<LanguageLog>;
+        const date = (current.date ?? todayKey()) as DateKey;
         return {
           id: current.id ?? createId("language-log"),
           languageId:
@@ -359,7 +401,8 @@ function normalizeState(input: unknown): AppState {
             languages.some((language) => language.id === current.languageId)
               ? current.languageId
               : primaryLanguageId,
-          date: (current.date ?? todayKey()) as DateKey,
+          date,
+          loggedAt: normalizeLoggedAt(date, current.loggedAt, current.createdAt),
           minutes: typeof current.minutes === "number" ? current.minutes : 0,
           note: current.note,
           createdAt: current.createdAt ?? new Date().toISOString(),
@@ -371,6 +414,7 @@ function normalizeState(input: unknown): AppState {
   const subjectLogs: SubjectLog[] = Array.isArray(raw.subjectLogs)
     ? raw.subjectLogs.map((log) => {
         const current = log as Partial<SubjectLog>;
+        const date = (current.date ?? todayKey()) as DateKey;
         return {
           id: current.id ?? createId("subject-log"),
           subjectId:
@@ -378,7 +422,8 @@ function normalizeState(input: unknown): AppState {
             subjects.some((subject) => subject.id === current.subjectId)
               ? current.subjectId
               : primarySubjectId,
-          date: (current.date ?? todayKey()) as DateKey,
+          date,
+          loggedAt: normalizeLoggedAt(date, current.loggedAt, current.createdAt),
           minutes: typeof current.minutes === "number" ? current.minutes : 0,
           note: current.note,
           createdAt: current.createdAt ?? new Date().toISOString(),
@@ -478,7 +523,13 @@ type StoreContextValue = {
     selectLanguage: (languageId: string) => void;
     startLanguageSession: (languageId: string) => void;
     stopLanguageSession: (note?: string) => void;
-    addLanguageMinutes: (languageId: string, minutes: number, dateKey?: DateKey, note?: string) => void;
+    addLanguageMinutes: (
+      languageId: string,
+      minutes: number,
+      dateKey?: DateKey,
+      note?: string,
+      loggedAt?: string,
+    ) => void;
     updateLanguageLog: (logId: string, minutes: number, note?: string) => void;
     deleteLanguageLog: (logId: string) => void;
     addSubject: (name: string) => void;
@@ -487,7 +538,13 @@ type StoreContextValue = {
     selectSubject: (subjectId: string) => void;
     startSubjectSession: (subjectId: string) => void;
     stopSubjectSession: (note?: string) => void;
-    addSubjectMinutes: (subjectId: string, minutes: number, dateKey?: DateKey, note?: string) => void;
+    addSubjectMinutes: (
+      subjectId: string,
+      minutes: number,
+      dateKey?: DateKey,
+      note?: string,
+      loggedAt?: string,
+    ) => void;
     updateSubjectLog: (logId: string, minutes: number, note?: string) => void;
     deleteSubjectLog: (logId: string) => void;
     addHabit: (name: string, startAt?: string) => void;
@@ -496,11 +553,18 @@ type StoreContextValue = {
     deleteHabit: (habitId: string) => void;
     toggleHabitDay: (habitId: string, dateKey: DateKey, value: boolean) => void;
     resetHabit: (habitId: string) => void;
-    addMovementLog: (activity: string, duration: number, note?: string, dateKey?: DateKey) => void;
+    addMovementLog: (
+      activity: string,
+      duration: number,
+      note?: string,
+      dateKey?: DateKey,
+      loggedAt?: string,
+    ) => void;
     updateMovementLog: (logId: string, activity: string, duration: number, note?: string) => void;
     deleteMovementLog: (logId: string) => void;
     addRunningLog: (payload: {
       date?: DateKey;
+      loggedAt?: string;
       distance: number;
       unit: RunUnit;
       duration: number;
@@ -514,11 +578,11 @@ type StoreContextValue = {
     addRunningPr: (label: string, value: string, date: DateKey, note?: string) => void;
     updateRunningPr: (prId: string, label: string, value: string, date: DateKey, note?: string) => void;
     deleteRunningPr: (prId: string) => void;
-    addWeightEntry: (weight: number, dateKey?: DateKey) => void;
+    addWeightEntry: (weight: number, dateKey?: DateKey, loggedAt?: string) => void;
     updateWeightEntry: (entryId: string, weight: number, dateKey?: DateKey) => void;
     deleteWeightEntry: (entryId: string) => void;
     setWeightStart: (weight: number) => void;
-    addWaistEntry: (inches: number, dateKey?: DateKey) => void;
+    addWaistEntry: (inches: number, dateKey?: DateKey, loggedAt?: string) => void;
     updateWaistEntry: (entryId: string, inches: number, dateKey?: DateKey) => void;
     deleteWaistEntry: (entryId: string) => void;
     setWaistStart: (inches: number) => void;
@@ -644,6 +708,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (!current.activeLanguageSession) return current;
           const elapsedMs = Date.now() - new Date(current.activeLanguageSession.startedAt).getTime();
           const minutes = Math.max(1, Math.round(elapsedMs / 60_000));
+          const loggedAt = new Date().toISOString();
 
           return {
             ...current,
@@ -652,10 +717,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               {
                 id: createId("language-log"),
                 languageId: current.activeLanguageSession.languageId,
-                date: todayKey(),
+                date: toDateKey(new Date(loggedAt)),
+                loggedAt,
                 minutes,
                 note,
-                createdAt: new Date().toISOString(),
+                createdAt: loggedAt,
                 source: "timer",
               },
               ...current.languageLogs,
@@ -663,7 +729,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           };
         });
       },
-      addLanguageMinutes(languageId: string, minutes: number, dateKey = todayKey(), note?: string) {
+      addLanguageMinutes(
+        languageId: string,
+        minutes: number,
+        dateKey = todayKey(),
+        note?: string,
+        loggedAt?: string,
+      ) {
+        const entryLoggedAt = loggedAt ?? normalizeLoggedAt(dateKey);
         setState((current) => ({
           ...current,
           selectedLanguageId: languageId,
@@ -672,6 +745,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               id: createId("language-log"),
               languageId,
               date: dateKey,
+              loggedAt: entryLoggedAt,
               minutes,
               note,
               createdAt: new Date().toISOString(),
@@ -754,6 +828,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (!current.activeSubjectSession) return current;
           const elapsedMs = Date.now() - new Date(current.activeSubjectSession.startedAt).getTime();
           const minutes = Math.max(1, Math.round(elapsedMs / 60_000));
+          const loggedAt = new Date().toISOString();
           return {
             ...current,
             activeSubjectSession: undefined,
@@ -761,10 +836,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               {
                 id: createId("subject-log"),
                 subjectId: current.activeSubjectSession.subjectId,
-                date: todayKey(),
+                date: toDateKey(new Date(loggedAt)),
+                loggedAt,
                 minutes,
                 note,
-                createdAt: new Date().toISOString(),
+                createdAt: loggedAt,
                 source: "timer",
               },
               ...current.subjectLogs,
@@ -772,7 +848,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           };
         });
       },
-      addSubjectMinutes(subjectId: string, minutes: number, dateKey = todayKey(), note?: string) {
+      addSubjectMinutes(
+        subjectId: string,
+        minutes: number,
+        dateKey = todayKey(),
+        note?: string,
+        loggedAt?: string,
+      ) {
+        const entryLoggedAt = loggedAt ?? normalizeLoggedAt(dateKey);
         setState((current) => ({
           ...current,
           selectedSubjectId: subjectId,
@@ -781,6 +864,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               id: createId("subject-log"),
               subjectId,
               date: dateKey,
+              loggedAt: entryLoggedAt,
               minutes,
               note,
               createdAt: new Date().toISOString(),
@@ -885,13 +969,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ),
         }));
       },
-      addMovementLog(activity: string, duration: number, note?: string, dateKey = todayKey()) {
+      addMovementLog(
+        activity: string,
+        duration: number,
+        note?: string,
+        dateKey = todayKey(),
+        loggedAt?: string,
+      ) {
+        const entryLoggedAt = loggedAt ?? normalizeLoggedAt(dateKey);
         setState((current) => ({
           ...current,
           movementLogs: [
             {
               id: createId("movement"),
               date: dateKey,
+              loggedAt: entryLoggedAt,
               activity,
               duration,
               note,
@@ -918,6 +1010,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       addRunningLog(payload: {
         date?: DateKey;
+        loggedAt?: string;
         distance: number;
         unit: RunUnit;
         duration: number;
@@ -931,6 +1024,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             {
               id: createId("run"),
               date: payload.date ?? todayKey(),
+              loggedAt: payload.loggedAt ?? normalizeLoggedAt(payload.date ?? todayKey()),
               distance: payload.distance,
               unit: payload.unit,
               duration: payload.duration,
@@ -947,7 +1041,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setState((current) => ({
           ...current,
           runningLogs: current.runningLogs.map((log) =>
-            log.id === logId ? { ...log, ...payload } : log,
+            log.id === logId
+              ? {
+                  ...log,
+                  ...payload,
+                  loggedAt:
+                    payload.date !== log.date
+                      ? alignLoggedAtToDate(payload.date, payload.loggedAt ?? log.loggedAt)
+                      : payload.loggedAt ?? log.loggedAt,
+                }
+              : log,
           ),
         }));
       },
@@ -1001,17 +1104,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           runningPrs: current.runningPrs.filter((entry) => entry.id !== prId),
         }));
       },
-      addWeightEntry(weight: number, dateKey = todayKey()) {
+      addWeightEntry(weight: number, dateKey = todayKey(), loggedAt?: string) {
+        const entryLoggedAt = loggedAt ?? normalizeLoggedAt(dateKey);
         setState((current) => ({
           ...current,
           weightLogs: [
             {
               id: createId("weight"),
               date: dateKey,
+              loggedAt: entryLoggedAt,
               weight,
               createdAt: new Date().toISOString(),
             },
-            ...current.weightLogs.filter((entry) => entry.date !== dateKey),
+            ...current.weightLogs,
           ],
         }));
       },
@@ -1020,7 +1125,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ...current,
           weightLogs: current.weightLogs.map((entry) =>
             entry.id === entryId
-              ? { ...entry, weight, date: dateKey ?? entry.date }
+              ? {
+                  ...entry,
+                  weight,
+                  date: dateKey ?? entry.date,
+                  loggedAt: dateKey ? alignLoggedAtToDate(dateKey, entry.loggedAt) : entry.loggedAt,
+                }
               : entry,
           ),
         }));
@@ -1037,17 +1147,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           weightStart: weight,
         }));
       },
-      addWaistEntry(inches: number, dateKey = todayKey()) {
+      addWaistEntry(inches: number, dateKey = todayKey(), loggedAt?: string) {
+        const entryLoggedAt = loggedAt ?? normalizeLoggedAt(dateKey);
         setState((current) => ({
           ...current,
           waistLogs: [
             {
               id: createId("waist"),
               date: dateKey,
+              loggedAt: entryLoggedAt,
               inches,
               createdAt: new Date().toISOString(),
             },
-            ...current.waistLogs.filter((entry) => entry.date !== dateKey),
+            ...current.waistLogs,
           ],
         }));
       },
@@ -1055,7 +1167,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setState((current) => ({
           ...current,
           waistLogs: current.waistLogs.map((entry) =>
-            entry.id === entryId ? { ...entry, inches, date: dateKey ?? entry.date } : entry,
+            entry.id === entryId
+              ? {
+                  ...entry,
+                  inches,
+                  date: dateKey ?? entry.date,
+                  loggedAt: dateKey ? alignLoggedAtToDate(dateKey, entry.loggedAt) : entry.loggedAt,
+                }
+              : entry,
           ),
         }));
       },

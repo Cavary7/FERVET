@@ -12,6 +12,7 @@ export type LanguageLog = {
   id: string;
   languageId: string;
   date: DateKey;
+  loggedAt: string;
   minutes: number;
   note?: string;
   createdAt: string;
@@ -34,6 +35,7 @@ export type SubjectLog = {
   id: string;
   subjectId: string;
   date: DateKey;
+  loggedAt: string;
   minutes: number;
   note?: string;
   createdAt: string;
@@ -43,6 +45,7 @@ export type SubjectLog = {
 export type MovementLog = {
   id: string;
   date: DateKey;
+  loggedAt: string;
   activity: string;
   duration: number;
   note?: string;
@@ -55,6 +58,7 @@ export type RunUnit = "mi" | "km";
 export type RunningLog = {
   id: string;
   date: DateKey;
+  loggedAt: string;
   distance: number;
   unit: RunUnit;
   duration: number;
@@ -76,6 +80,7 @@ export type RunningPr = {
 export type WeightLog = {
   id: string;
   date: DateKey;
+  loggedAt: string;
   weight: number;
   createdAt: string;
 };
@@ -83,6 +88,7 @@ export type WeightLog = {
 export type WaistLog = {
   id: string;
   date: DateKey;
+  loggedAt: string;
   inches: number;
   createdAt: string;
 };

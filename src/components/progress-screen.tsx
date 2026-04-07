@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { BACKUP_APP_NAME, createBackupPayload, isValidBackupPayload } from "@/lib/backup";
 import { RUN_TYPES } from "@/lib/constants";
-import { formatDurationSeconds, todayKey } from "@/lib/date";
+import { formatDateTimeLabel, formatDurationSeconds, todayKey } from "@/lib/date";
 import {
   getAutoDetectedRunningBests,
   getHabitStreak,
@@ -186,6 +186,7 @@ export function ProgressScreen() {
 
     actions.updateRunningLog(logId, {
       date: date as DateKey,
+      loggedAt: run.loggedAt,
       distance: parsedDistance,
       unit: run.unit,
       duration: parsedDuration,
@@ -658,11 +659,15 @@ export function ProgressScreen() {
             <div>
               <p className="text-sm font-medium text-white">Recent language logs</p>
               <div className="mt-3 space-y-3">
-                {state.languageLogs.slice(0, 5).map((log) => (
+                {[...state.languageLogs]
+                  .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime())
+                  .slice(0, 5)
+                  .map((log) => (
                   <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={log.id}>
                     <p className="text-sm text-white">
                       {state.languages.find((language) => language.id === log.languageId)?.name ?? "Language"} • {log.minutes} min
                     </p>
+                    <p className="mt-1 text-xs text-muted/78">{formatDateTimeLabel(log.loggedAt)}</p>
                     <div className="mt-2 flex gap-3">
                       <button className="text-xs text-blue-100/80" onClick={() => promptUpdateLanguageLog(log.id, log.minutes, log.note)} type="button">
                         Edit
@@ -685,11 +690,15 @@ export function ProgressScreen() {
             <div>
               <p className="text-sm font-medium text-white">Recent subject logs</p>
               <div className="mt-3 space-y-3">
-                {state.subjectLogs.slice(0, 5).map((log) => (
+                {[...state.subjectLogs]
+                  .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime())
+                  .slice(0, 5)
+                  .map((log) => (
                   <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={log.id}>
                     <p className="text-sm text-white">
                       {state.subjects.find((subject) => subject.id === log.subjectId)?.name ?? "Subject"} • {log.minutes} min
                     </p>
+                    <p className="mt-1 text-xs text-muted/78">{formatDateTimeLabel(log.loggedAt)}</p>
                     <div className="mt-2 flex gap-3">
                       <button className="text-xs text-blue-100/80" onClick={() => promptUpdateSubjectLog(log.id, log.minutes, log.note)} type="button">
                         Edit
@@ -712,9 +721,13 @@ export function ProgressScreen() {
             <div>
               <p className="text-sm font-medium text-white">Recent activity logs</p>
               <div className="mt-3 space-y-3">
-                {state.movementLogs.slice(0, 5).map((log) => (
+                {[...state.movementLogs]
+                  .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime())
+                  .slice(0, 5)
+                  .map((log) => (
                   <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={log.id}>
                     <p className="text-sm text-white">{log.activity} • {log.duration} min</p>
+                    <p className="mt-1 text-xs text-muted/78">{formatDateTimeLabel(log.loggedAt)}</p>
                     <div className="mt-2 flex gap-3">
                       <button className="text-xs text-blue-100/80" onClick={() => promptUpdateMovementLog(log.id, log.activity, log.duration, log.note)} type="button">
                         Edit
@@ -737,9 +750,13 @@ export function ProgressScreen() {
             <div>
               <p className="text-sm font-medium text-white">Recent runs</p>
               <div className="mt-3 space-y-3">
-                {state.runningLogs.slice(0, 5).map((run) => (
+                {[...state.runningLogs]
+                  .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime())
+                  .slice(0, 5)
+                  .map((run) => (
                   <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={run.id}>
                     <p className="text-sm text-white">{formatRun(run)}</p>
+                    <p className="mt-1 text-xs text-muted/78">{formatDateTimeLabel(run.loggedAt)}</p>
                     <div className="mt-2 flex gap-3">
                       <button className="text-xs text-blue-100/80" onClick={() => promptUpdateRunning(run.id, run)} type="button">
                         Edit
@@ -772,12 +789,12 @@ export function ProgressScreen() {
               <div className="mt-3 space-y-3">
                 {state.weightLogs
                   .slice()
-                  .sort((a, b) => b.date.localeCompare(a.date))
+                  .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime())
                   .slice(0, 5)
                   .map((entry) => (
                     <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={entry.id}>
                       <p className="text-sm text-white">
-                        {entry.weight} on {entry.date}
+                        {entry.weight} on {formatDateTimeLabel(entry.loggedAt)}
                       </p>
                       <div className="mt-2 flex gap-3">
                         <button className="text-xs text-blue-100/80" onClick={() => promptUpdateWeight(entry.id, entry.weight, entry.date)} type="button">
@@ -803,12 +820,12 @@ export function ProgressScreen() {
               <div className="mt-3 space-y-3">
                 {state.waistLogs
                   .slice()
-                  .sort((a, b) => b.date.localeCompare(a.date))
+                  .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime())
                   .slice(0, 5)
                   .map((entry) => (
                     <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={entry.id}>
                       <p className="text-sm text-white">
-                        {entry.inches}&quot; on {entry.date}
+                        {entry.inches}&quot; on {formatDateTimeLabel(entry.loggedAt)}
                       </p>
                       <div className="mt-2 flex gap-3">
                         <button className="text-xs text-blue-100/80" onClick={() => promptUpdateWaist(entry.id, entry.inches, entry.date)} type="button">

@@ -1,7 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { addDays, formatDurationSeconds, formatLongDate, formatMonthLabel, toDateKey, todayKey } from "@/lib/date";
+import {
+  addDays,
+  formatDateTimeLabel,
+  formatDurationSeconds,
+  formatLongDate,
+  formatMonthLabel,
+  toDateKey,
+  todayKey,
+} from "@/lib/date";
 import {
   getDayCompletion,
   getHabitStreak,
@@ -35,12 +43,14 @@ export function CalendarScreen() {
   const selectedMotto = getMottoForDate(state, selectedDay);
   const selectedDayCompletion = getDayCompletion(state, selectedDay);
   const selectedDayTasks = getTasksForDate(state, selectedDay);
-  const selectedMovement = state.movementLogs.filter((log) => log.date === selectedDay);
-  const selectedRuns = getRunsForDay(state, selectedDay);
-  const selectedWeight = state.weightLogs.find((log) => log.date === selectedDay);
-  const selectedWaist = state.waistLogs.find((log) => log.date === selectedDay);
-  const selectedLanguageLogs = state.languageLogs.filter((entry) => entry.date === selectedDay);
-  const selectedSubjectLogs = state.subjectLogs.filter((entry) => entry.date === selectedDay);
+  const sortByLoggedAtDesc = <T extends { loggedAt: string }>(entries: T[]) =>
+    [...entries].sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime());
+  const selectedMovement = sortByLoggedAtDesc(state.movementLogs.filter((log) => log.date === selectedDay));
+  const selectedRuns = sortByLoggedAtDesc(getRunsForDay(state, selectedDay));
+  const selectedWeight = sortByLoggedAtDesc(state.weightLogs.filter((log) => log.date === selectedDay));
+  const selectedWaist = sortByLoggedAtDesc(state.waistLogs.filter((log) => log.date === selectedDay));
+  const selectedLanguageLogs = sortByLoggedAtDesc(state.languageLogs.filter((entry) => entry.date === selectedDay));
+  const selectedSubjectLogs = sortByLoggedAtDesc(state.subjectLogs.filter((entry) => entry.date === selectedDay));
 
   return (
     <Shell>
@@ -137,12 +147,13 @@ export function CalendarScreen() {
           <div className="space-y-3 text-sm text-muted/88">
             {selectedMovement.map((entry) => (
               <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={entry.id}>
-                Activity: {entry.activity} • {entry.duration} min{entry.note ? ` - ${entry.note}` : ""}
+                Activity: {entry.activity} • {entry.duration} min • {formatDateTimeLabel(entry.loggedAt)}
+                {entry.note ? ` - ${entry.note}` : ""}
               </div>
             ))}
             {selectedRuns.map((run) => (
               <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={run.id}>
-                Run: {run.distance} {run.unit} • {formatDurationSeconds(run.duration)} • {run.runType}
+                Run: {run.distance} {run.unit} • {formatDurationSeconds(run.duration)} • {run.runType} • {formatDateTimeLabel(run.loggedAt)}
                 {run.notes ? ` - ${run.notes}` : ""}
               </div>
             ))}
@@ -151,7 +162,8 @@ export function CalendarScreen() {
                 state.languages.find((language) => language.id === entry.languageId)?.name ?? "Language";
               return (
                 <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={entry.id}>
-                  {languageName}: {entry.minutes} min{entry.note ? ` - ${entry.note}` : ""}
+                  {languageName}: {entry.minutes} min • {formatDateTimeLabel(entry.loggedAt)}
+                  {entry.note ? ` - ${entry.note}` : ""}
                 </div>
               );
             })}
@@ -160,7 +172,8 @@ export function CalendarScreen() {
                 state.subjects.find((subject) => subject.id === entry.subjectId)?.name ?? "Subject";
               return (
                 <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={entry.id}>
-                  {subjectName}: {entry.minutes} min{entry.note ? ` - ${entry.note}` : ""}
+                  {subjectName}: {entry.minutes} min • {formatDateTimeLabel(entry.loggedAt)}
+                  {entry.note ? ` - ${entry.note}` : ""}
                 </div>
               );
             })}
@@ -173,12 +186,16 @@ export function CalendarScreen() {
                 </div>
               );
             })}
-            {selectedWeight ? (
-              <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">Weight: {selectedWeight.weight}</div>
-            ) : null}
-            {selectedWaist ? (
-              <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">Waist: {selectedWaist.inches}&quot;</div>
-            ) : null}
+            {selectedWeight.map((entry) => (
+              <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={entry.id}>
+                Weight: {entry.weight} • {formatDateTimeLabel(entry.loggedAt)}
+              </div>
+            ))}
+            {selectedWaist.map((entry) => (
+              <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={entry.id}>
+                Waist: {entry.inches}&quot; • {formatDateTimeLabel(entry.loggedAt)}
+              </div>
+            ))}
             {selectedDayTasks.map((task) => (
               <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={task.id}>
                 Task: {task.title} {task.completedAt ? "• completed" : "• planned"}
@@ -188,8 +205,8 @@ export function CalendarScreen() {
             selectedRuns.length === 0 &&
             selectedLanguageLogs.length === 0 &&
             selectedSubjectLogs.length === 0 &&
-            !selectedWeight &&
-            !selectedWaist &&
+            selectedWeight.length === 0 &&
+            selectedWaist.length === 0 &&
             selectedDayTasks.length === 0 ? (
               <p>No entries recorded for this day.</p>
             ) : null}

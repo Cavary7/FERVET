@@ -2,7 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { RUN_TYPES } from "@/lib/constants";
-import { formatDurationSeconds, formatTimeSince, todayKey } from "@/lib/date";
+import {
+  formatDateTimeLabel,
+  formatDurationSeconds,
+  formatTimeSince,
+  toDateKey,
+  toDateTimeLocalInputValue,
+  toIsoFromLocalInput,
+  todayKey,
+} from "@/lib/date";
 import {
   getDayCompletion,
   getHabitStreak,
@@ -29,39 +37,36 @@ import {
   Shell,
   Textarea,
   Toggle,
+  Field,
 } from "@/components/ui";
-
-function toDateTimeLocalInputValue(iso: string) {
-  const date = new Date(iso);
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 16);
-}
-
-function toIsoFromLocalInput(value: string) {
-  return new Date(value).toISOString();
-}
 
 export function HomeScreen() {
   const { state, actions, now, hydrated } = useAppStore();
   const today = todayKey();
+  const nowLocalInput = useMemo(() => toDateTimeLocalInputValue(new Date().toISOString()), []);
   const [showRunningLogger, setShowRunningLogger] = useState(false);
   const [showHabits, setShowHabits] = useState(false);
   const [newLanguageName, setNewLanguageName] = useState("");
   const [newSubjectName, setNewSubjectName] = useState("");
   const [newHabitName, setNewHabitName] = useState("");
-  const [newHabitStartAt, setNewHabitStartAt] = useState(toDateTimeLocalInputValue(new Date().toISOString()));
+  const [newHabitStartAt, setNewHabitStartAt] = useState(nowLocalInput);
   const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
   const [editingHabitDate, setEditingHabitDate] = useState(today);
   const [editingHabitTime, setEditingHabitTime] = useState("08:00");
   const [languageManualMinutes, setLanguageManualMinutes] = useState("20");
   const [languageNote, setLanguageNote] = useState("");
+  const [languageLoggedAt, setLanguageLoggedAt] = useState(nowLocalInput);
   const [subjectManualMinutes, setSubjectManualMinutes] = useState("30");
   const [subjectNote, setSubjectNote] = useState("");
+  const [subjectLoggedAt, setSubjectLoggedAt] = useState(nowLocalInput);
   const [activityName, setActivityName] = useState("soccer");
   const [activityDuration, setActivityDuration] = useState("45");
   const [activityNote, setActivityNote] = useState("");
+  const [activityLoggedAt, setActivityLoggedAt] = useState(nowLocalInput);
   const [weightInput, setWeightInput] = useState("");
   const [waistInput, setWaistInput] = useState("");
+  const [weightLoggedAt, setWeightLoggedAt] = useState(nowLocalInput);
+  const [waistLoggedAt, setWaistLoggedAt] = useState(nowLocalInput);
   const [runDistance, setRunDistance] = useState("");
   const [runMinutes, setRunMinutes] = useState("");
   const [runSeconds, setRunSeconds] = useState("");
@@ -69,6 +74,7 @@ export function HomeScreen() {
   const [runType, setRunType] = useState<string>("easy");
   const [runUnit, setRunUnit] = useState<"mi" | "km">("mi");
   const [runNotes, setRunNotes] = useState("");
+  const [runLoggedAt, setRunLoggedAt] = useState(nowLocalInput);
 
   const selectedLanguageId = state.selectedLanguageId ?? state.languages[0]?.id;
   const selectedLanguage =
@@ -86,6 +92,9 @@ export function HomeScreen() {
   const waist = getWaistSummary(state);
   const runningWeek = getWeeklyRunningSummary(state);
   const runsToday = getRunsForDay(state, today);
+  const recentActivityEntries = [...state.movementLogs]
+    .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime())
+    .slice(0, 3);
   const completedTasksToday = state.tasks.filter(
     (task) => task.completedAt && new Date(task.completedAt).toISOString().slice(0, 10) === today,
   ).length;
@@ -180,6 +189,7 @@ export function HomeScreen() {
     const minutes = Number(runMinutes || "0");
     const seconds = Number(runSeconds || "0");
     const duration = minutes * 60 + seconds;
+    const loggedAt = toIsoFromLocalInput(runLoggedAt);
     if (
       !Number.isFinite(distance) ||
       distance <= 0 ||
@@ -190,6 +200,8 @@ export function HomeScreen() {
       return;
     }
     actions.addRunningLog({
+      date: toDateKey(new Date(loggedAt)),
+      loggedAt,
       distance,
       unit: runUnit,
       duration,
@@ -202,6 +214,7 @@ export function HomeScreen() {
     setRunSeconds("");
     setRunPace("");
     setRunNotes("");
+    setRunLoggedAt(toDateTimeLocalInputValue(new Date().toISOString()));
   }
 
   return (
@@ -415,13 +428,24 @@ export function HomeScreen() {
                     onClick={() => {
                       const minutes = Number(languageManualMinutes);
                       if (!selectedLanguage || !Number.isFinite(minutes) || minutes <= 0) return;
-                      actions.addLanguageMinutes(selectedLanguage.id, minutes, today, languageNote);
+                      const loggedAt = toIsoFromLocalInput(languageLoggedAt);
+                      actions.addLanguageMinutes(
+                        selectedLanguage.id,
+                        minutes,
+                        toDateKey(new Date(loggedAt)),
+                        languageNote,
+                        loggedAt,
+                      );
                       setLanguageNote("");
+                      setLanguageLoggedAt(toDateTimeLocalInputValue(new Date().toISOString()));
                     }}
                   >
                     Log
                   </PillButton>
                 </div>
+                <Field label="Study date & time">
+                  <Input onChange={(event) => setLanguageLoggedAt(event.target.value)} type="datetime-local" value={languageLoggedAt} />
+                </Field>
                 <Textarea onChange={(event) => setLanguageNote(event.target.value)} placeholder="Optional note" value={languageNote} />
               </div>
             </Card>
@@ -460,13 +484,24 @@ export function HomeScreen() {
                     onClick={() => {
                       const minutes = Number(subjectManualMinutes);
                       if (!selectedSubject || !Number.isFinite(minutes) || minutes <= 0) return;
-                      actions.addSubjectMinutes(selectedSubject.id, minutes, today, subjectNote);
+                      const loggedAt = toIsoFromLocalInput(subjectLoggedAt);
+                      actions.addSubjectMinutes(
+                        selectedSubject.id,
+                        minutes,
+                        toDateKey(new Date(loggedAt)),
+                        subjectNote,
+                        loggedAt,
+                      );
                       setSubjectNote("");
+                      setSubjectLoggedAt(toDateTimeLocalInputValue(new Date().toISOString()));
                     }}
                   >
                     Log
                   </PillButton>
                 </div>
+                <Field label="Study date & time">
+                  <Input onChange={(event) => setSubjectLoggedAt(event.target.value)} type="datetime-local" value={subjectLoggedAt} />
+                </Field>
                 <Textarea onChange={(event) => setSubjectNote(event.target.value)} placeholder="Optional note" value={subjectNote} />
               </div>
             </Card>
@@ -478,17 +513,45 @@ export function HomeScreen() {
                 <div className="mt-4 space-y-3">
                   <Input onChange={(event) => setActivityName(event.target.value)} placeholder="Activity name" value={activityName} />
                   <Input min="1" onChange={(event) => setActivityDuration(event.target.value)} type="number" value={activityDuration} />
+                  <Field label="When it happened">
+                    <Input onChange={(event) => setActivityLoggedAt(event.target.value)} type="datetime-local" value={activityLoggedAt} />
+                  </Field>
                   <Textarea onChange={(event) => setActivityNote(event.target.value)} placeholder="Optional note" value={activityNote} />
                   <PillButton
                     onClick={() => {
                       const duration = Number(activityDuration);
                       if (!Number.isFinite(duration) || duration <= 0) return;
-                      actions.addMovementLog(activityName || "activity", duration, activityNote);
+                      const loggedAt = toIsoFromLocalInput(activityLoggedAt);
+                      actions.addMovementLog(
+                        activityName || "activity",
+                        duration,
+                        activityNote,
+                        toDateKey(new Date(loggedAt)),
+                        loggedAt,
+                      );
                       setActivityNote("");
+                      setActivityLoggedAt(toDateTimeLocalInputValue(new Date().toISOString()));
                     }}
                   >
                     Log activity
                   </PillButton>
+                  {recentActivityEntries.length > 0 ? (
+                    <div className="space-y-2 rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-blue-100/45">Recent activity</p>
+                      {recentActivityEntries.map((entry) => (
+                        <div className="flex items-center justify-between gap-3 text-sm" key={entry.id}>
+                          <div>
+                            <p className="text-white">
+                              {entry.activity}{" "}
+                              <span className="text-muted/80">- {entry.duration} min</span>
+                            </p>
+                            {entry.note ? <p className="text-xs text-muted/78">{entry.note}</p> : null}
+                          </div>
+                          <p className="shrink-0 text-xs text-blue-100/68">{formatDateTimeLabel(entry.loggedAt)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               </Card>
 
@@ -497,25 +560,35 @@ export function HomeScreen() {
                 <p className="mt-1 text-sm text-muted/90">Track weight and waist without adding noise.</p>
                 <div className="mt-4 space-y-3">
                   <Input inputMode="decimal" onChange={(event) => setWeightInput(event.target.value)} placeholder="Current weight" value={weightInput} />
+                  <Field label="Weight date & time">
+                    <Input onChange={(event) => setWeightLoggedAt(event.target.value)} type="datetime-local" value={weightLoggedAt} />
+                  </Field>
                   <PillButton
                     onClick={() => {
                       const value = Number(weightInput);
                       if (!Number.isFinite(value) || value <= 0) return;
+                      const loggedAt = toIsoFromLocalInput(weightLoggedAt);
                       if (state.weightStart === undefined) actions.setWeightStart(value);
-                      actions.addWeightEntry(value);
+                      actions.addWeightEntry(value, toDateKey(new Date(loggedAt)), loggedAt);
                       setWeightInput("");
+                      setWeightLoggedAt(toDateTimeLocalInputValue(new Date().toISOString()));
                     }}
                   >
                     Save weight
                   </PillButton>
                   <Input inputMode="decimal" onChange={(event) => setWaistInput(event.target.value)} placeholder="Waist (inches)" value={waistInput} />
+                  <Field label="Waist date & time">
+                    <Input onChange={(event) => setWaistLoggedAt(event.target.value)} type="datetime-local" value={waistLoggedAt} />
+                  </Field>
                   <PillButton
                     onClick={() => {
                       const value = Number(waistInput);
                       if (!Number.isFinite(value) || value <= 0) return;
+                      const loggedAt = toIsoFromLocalInput(waistLoggedAt);
                       if (state.waistStart === undefined) actions.setWaistStart(value);
-                      actions.addWaistEntry(value);
+                      actions.addWaistEntry(value, toDateKey(new Date(loggedAt)), loggedAt);
                       setWaistInput("");
+                      setWaistLoggedAt(toDateTimeLocalInputValue(new Date().toISOString()));
                     }}
                     variant="ghost"
                   >
@@ -562,6 +635,9 @@ export function HomeScreen() {
                       Duration preview: {formatDurationSeconds(Number(runMinutes || "0") * 60 + Number(runSeconds || "0"))}
                     </p>
                   </div>
+                  <Field label="Run date & time">
+                    <Input onChange={(event) => setRunLoggedAt(event.target.value)} type="datetime-local" value={runLoggedAt} />
+                  </Field>
                   <Input onChange={(event) => setRunPace(event.target.value)} placeholder="Pace (optional)" value={runPace} />
                   <Select onChange={(event) => setRunType(event.target.value)} value={runType}>
                     {RUN_TYPES.map((type) => (

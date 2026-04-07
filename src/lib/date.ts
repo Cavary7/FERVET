@@ -59,6 +59,22 @@ export function formatDateLabel(date: Date) {
   });
 }
 
+export function formatTimeLabel(timestamp: string) {
+  return new Date(timestamp).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+export function formatDateTimeLabel(timestamp: string) {
+  return new Date(timestamp).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function formatLongDate(dateKey: DateKey) {
   return fromDateKey(dateKey).toLocaleDateString(undefined, {
     weekday: "long",
@@ -93,6 +109,16 @@ export function formatDurationSeconds(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+export function toDateTimeLocalInputValue(iso: string) {
+  const date = new Date(iso);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+export function toIsoFromLocalInput(value: string) {
+  return new Date(value).toISOString();
 }
 
 export function daysBetween(start: Date, end: Date) {

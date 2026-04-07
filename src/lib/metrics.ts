@@ -4,6 +4,7 @@ import {
   eachDayOfInterval,
   formatDurationSeconds,
   formatDateLabel,
+  formatDateTimeLabel,
   fromDateKey,
   getWeekStart,
   startOfDay,
@@ -11,6 +12,10 @@ import {
   todayKey,
 } from "@/lib/date";
 import { AppState, DateKey, Goal, Habit, Motto, Task } from "@/lib/types";
+
+function sortByLoggedAt<T extends { loggedAt: string }>(entries: T[]) {
+  return [...entries].sort((a, b) => new Date(a.loggedAt).getTime() - new Date(b.loggedAt).getTime());
+}
 
 function hashDateKey(dateKey: DateKey) {
   return dateKey.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
@@ -197,7 +202,7 @@ export function getTasksForDate(state: AppState, dateKey: DateKey) {
 }
 
 export function getWeightSummary(state: AppState) {
-  const sorted = [...state.weightLogs].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = sortByLoggedAt(state.weightLogs);
   const current = sorted.at(-1)?.weight;
   const start = state.weightStart;
   const delta = start !== undefined && current !== undefined ? current - start : undefined;
@@ -209,14 +214,14 @@ export function getWeightSummary(state: AppState) {
     lost: delta !== undefined && delta < 0 ? Math.abs(delta) : 0,
     gained: delta !== undefined && delta > 0 ? delta : 0,
     chartData: sorted.map((entry) => ({
-      date: formatDateLabel(fromDateKey(entry.date)),
+      date: formatDateTimeLabel(entry.loggedAt),
       weight: entry.weight,
     })),
   };
 }
 
 export function getWaistSummary(state: AppState) {
-  const sorted = [...state.waistLogs].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = sortByLoggedAt(state.waistLogs);
   const current = sorted.at(-1)?.inches;
   const start = state.waistStart;
   const delta = start !== undefined && current !== undefined ? current - start : undefined;
@@ -226,7 +231,7 @@ export function getWaistSummary(state: AppState) {
     start,
     delta,
     chartData: sorted.map((entry) => ({
-      date: formatDateLabel(fromDateKey(entry.date)),
+      date: formatDateTimeLabel(entry.loggedAt),
       inches: entry.inches,
     })),
   };
@@ -285,7 +290,7 @@ export function getWeeklyRunningSummary(state: AppState) {
 
 export function getRunningPerformanceSummary(state: AppState) {
   const preferredUnit = getPreferredRunUnit(state);
-  const allRuns = [...state.runningLogs].sort((a, b) => a.date.localeCompare(b.date));
+  const allRuns = sortByLoggedAt(state.runningLogs);
   const last30Boundary = addDaysToKey(todayKey(), -29);
 
   const weeklyBuckets = new Map<string, number>();
