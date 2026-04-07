@@ -252,13 +252,13 @@ export function BottomSheet({
         onClick={onClose}
         type="button"
       />
-      <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-md rounded-t-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,38,66,0.98),rgba(8,14,26,0.98))] px-4 pb-6 pt-3 shadow-[0_-24px_64px_rgba(0,0,0,0.45)]">
+      <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-md rounded-t-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,38,66,0.98),rgba(8,14,26,0.98))] px-4 pb-5 pt-3 shadow-[0_-24px_64px_rgba(0,0,0,0.45)]">
         <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-white/12" />
         <div className="mb-4">
           <p className="text-lg font-semibold tracking-[-0.03em] text-white">{title}</p>
           {subtitle ? <p className="mt-1 text-sm text-muted/85">{subtitle}</p> : null}
         </div>
-        <div className="max-h-[70vh] overflow-y-auto pb-safe">{children}</div>
+        <div className="max-h-[72vh] overflow-y-auto pr-1">{children}</div>
       </div>
     </div>
   );

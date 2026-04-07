@@ -71,7 +71,15 @@ export function GoalEditSheet({
       subtitle="Update the goal details without leaving the flow."
       title="Edit goal"
     >
-      <div className="space-y-3">
+      <div className="space-y-4 pb-2">
+        <div className="rounded-[20px] border border-white/8 bg-white/[0.03] px-3 py-3">
+          <p className="text-xs uppercase tracking-[0.18em] text-blue-100/45">
+            {goal?.mode === "linked" ? "Linked goal" : "Manual goal"}
+          </p>
+          <p className="mt-1 text-sm text-muted/82">
+            Changes save directly to Fervet and update the goals list immediately.
+          </p>
+        </div>
         <Field label="Title">
           <Input onChange={(event) => setTitle(event.target.value)} value={title} />
         </Field>
@@ -154,72 +162,76 @@ export function GoalEditSheet({
             <Input onChange={(event) => setTargetDate(event.target.value)} type="date" value={targetDate} />
           </Field>
         ) : null}
-        <div className="flex gap-3 pt-2">
-          <PillButton
-            onClick={() => {
-              if (!goal) return;
-              const parsedTarget = Number(targetValue);
-              if (!Number.isFinite(parsedTarget) || parsedTarget <= 0) return;
-              const updates: Partial<Goal> =
-                goal.mode === "linked"
-                  ? {
-                      title: title.trim(),
-                      targetValue: parsedTarget,
-                      unit,
-                      timeframe,
-                      targetDate: timeframe === "custom" ? targetDate || undefined : undefined,
-                      linkedType,
-                      languageId: linkedType === "language-study" ? languageId : undefined,
-                      subjectId: linkedType === "school-study" ? subjectId : undefined,
-                      habitId: linkedType === "habit" ? habitId : undefined,
-                    }
-                  : {
-                      title: title.trim(),
-                      targetValue: parsedTarget,
-                      unit,
-                      timeframe,
-                      targetDate: timeframe === "custom" ? targetDate || undefined : undefined,
-                      manualType,
-                      currentValue: Number(currentValue || "0"),
-                    };
-              onSave(goal.id, updates);
-              onClose();
-            }}
-          >
-            Save changes
-          </PillButton>
-          <PillButton onClick={onClose} variant="ghost">
-            Cancel
-          </PillButton>
-        </div>
-        {showDeleteConfirm ? (
-          <div className="rounded-[22px] border border-red-400/10 bg-red-500/10 p-4">
-            <p className="text-sm text-red-100">Delete this goal?</p>
-            <div className="mt-3 flex gap-3">
-              <PillButton
-                onClick={() => {
-                  if (!goal) return;
-                  onDelete(goal.id);
-                  onClose();
-                }}
-                variant="danger"
-              >
-                Delete
-              </PillButton>
-              <PillButton onClick={() => setShowDeleteConfirm(false)} variant="ghost">
-                Keep goal
-              </PillButton>
-            </div>
+        <div className="rounded-[22px] border border-white/8 bg-white/[0.03] p-3">
+          <p className="text-xs uppercase tracking-[0.18em] text-blue-100/45">Goal actions</p>
+          <div className="mt-3 flex gap-3">
+            <PillButton
+              onClick={() => {
+                if (!goal) return;
+                const parsedTarget = Number(targetValue);
+                if (!Number.isFinite(parsedTarget) || parsedTarget <= 0) return;
+                const updates: Partial<Goal> =
+                  goal.mode === "linked"
+                    ? {
+                        title: title.trim(),
+                        targetValue: parsedTarget,
+                        unit,
+                        timeframe,
+                        targetDate: timeframe === "custom" ? targetDate || undefined : undefined,
+                        linkedType,
+                        languageId: linkedType === "language-study" ? languageId : undefined,
+                        subjectId: linkedType === "school-study" ? subjectId : undefined,
+                        habitId: linkedType === "habit" ? habitId : undefined,
+                      }
+                    : {
+                        title: title.trim(),
+                        targetValue: parsedTarget,
+                        unit,
+                        timeframe,
+                        targetDate: timeframe === "custom" ? targetDate || undefined : undefined,
+                        manualType,
+                        currentValue: Number(currentValue || "0"),
+                      };
+                onSave(goal.id, updates);
+                onClose();
+              }}
+            >
+              Save changes
+            </PillButton>
+            <PillButton onClick={onClose} variant="ghost">
+              Cancel
+            </PillButton>
           </div>
-        ) : (
-          <button
-            className="pt-2 text-sm text-red-200"
-            onClick={() => setShowDeleteConfirm(true)}
-            type="button"
-          >
-            Delete goal
-          </button>
-        )}
+          {showDeleteConfirm ? (
+            <div className="mt-3 rounded-[18px] border border-red-400/12 bg-red-500/10 p-3">
+              <p className="text-sm text-red-100">Delete this goal immediately?</p>
+              <div className="mt-3 flex gap-3">
+                <PillButton
+                  onClick={() => {
+                    if (!goal) return;
+                    onDelete(goal.id);
+                    setShowDeleteConfirm(false);
+                    onClose();
+                  }}
+                  variant="danger"
+                >
+                  Delete goal
+                </PillButton>
+                <PillButton onClick={() => setShowDeleteConfirm(false)} variant="ghost">
+                  Keep goal
+                </PillButton>
+              </div>
+            </div>
+          ) : (
+            <button
+              className="mt-3 text-sm text-red-200"
+              onClick={() => setShowDeleteConfirm(true)}
+              type="button"
+            >
+              Delete goal
+            </button>
+          )}
+        </div>
       </div>
     </BottomSheet>
   );

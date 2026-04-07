@@ -139,7 +139,7 @@ export function GoalsScreen() {
 
   return (
     <Shell>
-      <header className="mb-6">
+      <header className="mb-5">
         <p className="text-[11px] uppercase tracking-[0.28em] text-blue-200/65">Goals</p>
         <h1 className="mt-3 text-white">Aim at something measurable.</h1>
         <p className="mt-3 max-w-xs text-sm text-muted/90">
@@ -147,8 +147,8 @@ export function GoalsScreen() {
         </p>
       </header>
 
-      <div className="space-y-5">
-        <Card>
+      <div className="space-y-4 pb-2">
+        <Card className="p-4">
           <SectionTitle title="Create goal" subtitle="Linked goals stay synced. Manual goals stay flexible." />
           <div className="space-y-3">
             <SegmentedControl
@@ -262,7 +262,7 @@ export function GoalsScreen() {
                             : "Manual goal"}
                       </p>
                     </div>
-                    <div className="text-right">
+                    <div className="shrink-0 text-right">
                       <p className="text-xl font-semibold text-blue-100">{goal.percent}%</p>
                       <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-blue-100/45">
                         {labelForTimeframe(goal.timeframe)}
@@ -303,14 +303,18 @@ export function GoalsScreen() {
                     ) : null}
                   </div>
                   <div className="mt-4 flex gap-3">
-                    <button className="text-xs text-blue-100/80" onClick={() => setEditingGoalId(goal.id)} type="button">
+                    <button
+                      className="rounded-full border border-white/8 bg-white/[0.04] px-3 py-1.5 text-xs text-blue-100/85"
+                      onClick={() => setEditingGoalId(goal.id)}
+                      type="button"
+                    >
                       Edit goal
                     </button>
                   </div>
                 </Card>
               ))
             ) : (
-              <Card>
+              <Card className="p-4">
                 <p className="text-sm text-muted/85">No goals yet. Add one linked or manual goal to start seeing progress here.</p>
               </Card>
             )}
