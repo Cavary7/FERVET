@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const items = [
   { href: "/", label: "Home" },
+  { href: "/track", label: "Track" },
   { href: "/calendar", label: "Calendar" },
   { href: "/goals", label: "Goals" },
   { href: "/progress", label: "Progress" },
@@ -23,7 +24,7 @@ export function BottomNav() {
             return (
               <li className="min-w-0 flex-1" key={item.href}>
                 <Link
-                  className={`flex min-h-[50px] items-center justify-center rounded-2xl px-1 text-center text-[13px] font-medium leading-none transition ${
+                  className={`flex min-h-[50px] items-center justify-center rounded-2xl px-1 text-center text-[12px] font-medium leading-none transition ${
                     active
                       ? "bg-accent text-white shadow-glow"
                       : "text-muted hover:bg-panelStrong hover:text-foreground"
