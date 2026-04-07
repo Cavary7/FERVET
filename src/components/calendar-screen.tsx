@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { addDays, formatLongDate, formatMonthLabel, toDateKey, todayKey } from "@/lib/date";
+import { addDays, formatDurationSeconds, formatLongDate, formatMonthLabel, toDateKey, todayKey } from "@/lib/date";
 import {
   getDayCompletion,
   getLanguageMinutesForDay,
@@ -126,12 +126,12 @@ export function CalendarScreen() {
           <div className="space-y-3 text-sm text-muted/88">
             {selectedMovement.map((entry) => (
               <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={entry.id}>
-                Movement: {entry.duration} min{entry.note ? ` - ${entry.note}` : ""}
+                Activity: {entry.activity} • {entry.duration} min{entry.note ? ` - ${entry.note}` : ""}
               </div>
             ))}
             {selectedRuns.map((run) => (
               <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={run.id}>
-                Run: {run.distance} {run.unit} • {run.duration} min • {run.runType}
+                Run: {run.distance} {run.unit} • {formatDurationSeconds(run.duration)} • {run.runType}
                 {run.notes ? ` - ${run.notes}` : ""}
               </div>
             ))}

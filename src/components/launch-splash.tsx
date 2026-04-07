@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { BRANDING } from "@/lib/branding";
 import { todayKey } from "@/lib/date";
 import { getMottoForDate } from "@/lib/metrics";
@@ -10,26 +10,40 @@ export function LaunchSplash() {
   const { state, hydrated } = useAppStore();
   const [mounted, setMounted] = useState(true);
   const [visible, setVisible] = useState(true);
-  const today = todayKey();
-  const motto = useMemo(() => getMottoForDate(state, today), [state, today]);
+  const [latinText, setLatinText] = useState("");
+  const [englishText, setEnglishText] = useState("");
+  const [showEnglish, setShowEnglish] = useState(false);
 
   useEffect(() => {
     if (!hydrated) {
       return;
     }
 
-    const timer = window.setTimeout(() => {
-      setVisible(false);
-    }, 1400);
-    const cleanup = window.setTimeout(() => {
-      setMounted(false);
-    }, 2050);
+    const motto = getMottoForDate(state, todayKey());
+    const chars = Array.from(motto.latin);
+    const step = Math.max(32, Math.min(58, Math.floor(1400 / Math.max(chars.length, 1))));
+    setLatinText("");
+    setEnglishText(motto.english);
+    setShowEnglish(false);
+
+    const interval = window.setInterval(() => {
+      setLatinText((current) => {
+        const nextIndex = current.length;
+        const next = chars.slice(0, nextIndex + 1).join("");
+        if (next.length === motto.latin.length) {
+          window.clearInterval(interval);
+          window.setTimeout(() => setShowEnglish(true), 180);
+          window.setTimeout(() => setVisible(false), 900);
+          window.setTimeout(() => setMounted(false), 1550);
+        }
+        return next;
+      });
+    }, step);
 
     return () => {
-      window.clearTimeout(timer);
-      window.clearTimeout(cleanup);
+      window.clearInterval(interval);
     };
-  }, [hydrated]);
+  }, [hydrated, state]);
 
   if (!mounted) {
     return null;
@@ -52,9 +66,15 @@ export function LaunchSplash() {
             {BRANDING.appName}
           </p>
           <p className="mt-5 text-[2rem] font-semibold leading-[1.05] tracking-[-0.05em] text-white">
-            {motto.latin}
+            {latinText || "\u00A0"}
           </p>
-          <p className="mt-4 text-base leading-7 text-blue-50/74">{motto.english}</p>
+          <p
+            className={`mt-4 min-h-14 text-base leading-7 text-blue-50/74 transition duration-500 ${
+              showEnglish ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            {englishText || "\u00A0"}
+          </p>
         </div>
       </div>
     </div>

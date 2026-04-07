@@ -2,7 +2,7 @@
 
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { RUN_TYPES } from "@/lib/constants";
-import { todayKey } from "@/lib/date";
+import { formatDurationSeconds, todayKey } from "@/lib/date";
 import {
   getHabitStreak,
   getLanguageSummaries,
@@ -19,7 +19,7 @@ import { DateKey } from "@/lib/types";
 import { Card, MetricCard, PillButton, SectionTitle, Select, Shell } from "@/components/ui";
 
 function formatRun(run: { distance: number; unit: string; duration: number; runType: string }) {
-  return `${run.distance} ${run.unit} • ${run.duration} min • ${run.runType}`;
+  return `${run.distance} ${run.unit} • ${formatDurationSeconds(run.duration)} • ${run.runType}`;
 }
 
 export function ProgressScreen() {
@@ -34,7 +34,15 @@ export function ProgressScreen() {
     if (!nextTitle) return;
     const nextDueDate = window.prompt("Edit due date (YYYY-MM-DD)", dueDate);
     if (!nextDueDate) return;
-    actions.updateTask(taskId, nextTitle, nextDueDate as DateKey);
+    const nextRecurrence = window.prompt("Edit recurrence (daily, weekly, monthly, or blank)", "");
+    actions.updateTask(
+      taskId,
+      nextTitle,
+      nextDueDate as DateKey,
+      nextRecurrence === "daily" || nextRecurrence === "weekly" || nextRecurrence === "monthly"
+        ? nextRecurrence
+        : undefined,
+    );
   }
 
   function promptUpdateLanguageLog(logId: string, minutes: number, note?: string) {
@@ -46,13 +54,15 @@ export function ProgressScreen() {
     actions.updateLanguageLog(logId, parsed, nextNote);
   }
 
-  function promptUpdateMovementLog(logId: string, duration: number, note?: string) {
+  function promptUpdateMovementLog(logId: string, activity: string, duration: number, note?: string) {
+    const nextActivity = window.prompt("Edit activity", activity);
+    if (!nextActivity) return;
     const nextDuration = window.prompt("Edit movement minutes", String(duration));
     if (!nextDuration) return;
     const parsed = Number(nextDuration);
     if (!Number.isFinite(parsed) || parsed <= 0) return;
     const nextNote = window.prompt("Edit note", note ?? "") ?? undefined;
-    actions.updateMovementLog(logId, parsed, nextNote);
+    actions.updateMovementLog(logId, nextActivity, parsed, nextNote);
   }
 
   function promptUpdateWeight(entryId: string, weightValue: number, date: string) {
@@ -68,11 +78,21 @@ export function ProgressScreen() {
   function promptUpdateRunning(logId: string, run: typeof state.runningLogs[number]) {
     const distance = window.prompt("Edit distance", String(run.distance));
     if (!distance) return;
-    const duration = window.prompt("Edit duration (min)", String(run.duration));
-    if (!duration) return;
+    const minutes = window.prompt("Edit duration minutes", String(Math.floor(run.duration / 60)));
+    if (!minutes) return;
+    const seconds = window.prompt("Edit duration seconds", String(run.duration % 60));
+    if (!seconds) return;
     const parsedDistance = Number(distance);
-    const parsedDuration = Number(duration);
-    if (!Number.isFinite(parsedDistance) || parsedDistance <= 0 || !Number.isFinite(parsedDuration) || parsedDuration <= 0) {
+    const parsedMinutes = Number(minutes);
+    const parsedSeconds = Number(seconds);
+    const parsedDuration = parsedMinutes * 60 + parsedSeconds;
+    if (
+      !Number.isFinite(parsedDistance) ||
+      parsedDistance <= 0 ||
+      !Number.isFinite(parsedMinutes) ||
+      !Number.isFinite(parsedSeconds) ||
+      parsedDuration <= 0
+    ) {
       return;
     }
     const runType = window.prompt(
@@ -440,9 +460,9 @@ export function ProgressScreen() {
               <div className="mt-3 space-y-3">
                 {state.movementLogs.slice(0, 5).map((log) => (
                   <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3" key={log.id}>
-                    <p className="text-sm text-white">{log.duration} min movement</p>
+                    <p className="text-sm text-white">{log.activity} • {log.duration} min</p>
                     <div className="mt-2 flex gap-3">
-                      <button className="text-xs text-blue-100/80" onClick={() => promptUpdateMovementLog(log.id, log.duration, log.note)} type="button">
+                      <button className="text-xs text-blue-100/80" onClick={() => promptUpdateMovementLog(log.id, log.activity, log.duration, log.note)} type="button">
                         Edit
                       </button>
                       <button

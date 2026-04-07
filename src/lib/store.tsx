@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import { DEFAULT_MOTTOES } from "@/lib/constants";
-import { todayKey } from "@/lib/date";
+import { addDaysToKey, fromDateKey, todayKey } from "@/lib/date";
 import { loadState, saveState, STORAGE_KEY } from "@/lib/storage";
 import {
   AppState,
@@ -51,17 +51,70 @@ function createDefaultLanguage(name = "Mandarin"): Language {
   };
 }
 
-function createDefaultHabit(name = "Habit maintained"): Habit {
+function createDefaultHabit(name = "Habit maintained", startDateKey = todayKey()): Habit {
   return {
     id: createId("habit"),
     name,
     createdAt: new Date().toISOString(),
     cleanDays: {
       [todayKey()]: true,
+      [startDateKey]: true,
     },
-    currentStartAt: new Date().toISOString(),
+    currentStartAt: isoFromDateKey(startDateKey),
     resets: [],
   };
+}
+
+function isoFromDateKey(dateKey: DateKey) {
+  return fromDateKey(dateKey).toISOString();
+}
+
+function createRecurringTaskId() {
+  return createId("recurring-task");
+}
+
+function getNextDueDate(dateKey: DateKey, recurrence: "daily" | "weekly" | "monthly") {
+  if (recurrence === "daily") return addDaysToKey(dateKey, 1);
+  if (recurrence === "weekly") return addDaysToKey(dateKey, 7);
+  const base = fromDateKey(dateKey);
+  return `${base.getFullYear()}-${String(base.getMonth() + 2).padStart(2, "0")}-${String(
+    Math.min(base.getDate(), new Date(base.getFullYear(), base.getMonth() + 2, 0).getDate()),
+  ).padStart(2, "0")}` as DateKey;
+}
+
+function ensureRecurringTasks(tasks: Task[]) {
+  const result = [...tasks];
+  const groups = new Map<string, Task[]>();
+
+  result.forEach((task) => {
+    if (task.recurringTaskId && task.recurrence) {
+      groups.set(task.recurringTaskId, [...(groups.get(task.recurringTaskId) ?? []), task]);
+    }
+  });
+
+  groups.forEach((entries) => {
+    const recurrence = entries[0].recurrence;
+    if (!recurrence) return;
+
+    const latest = [...entries].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).at(-1);
+    if (!latest) return;
+
+    const hasOpenTask = entries.some((task) => !task.completedAt);
+    let cursor = latest.dueDate;
+
+    while (!hasOpenTask && cursor < todayKey()) {
+      cursor = getNextDueDate(cursor, recurrence);
+      result.push({
+        ...latest,
+        id: createId("task"),
+        dueDate: cursor,
+        completedAt: undefined,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  });
+
+  return result;
 }
 
 function createDefaultState(): AppState {
@@ -73,6 +126,7 @@ function createDefaultState(): AppState {
     selectedLanguageId: language.id,
     languageLogs: [],
     movementLogs: [],
+    runningDurationVersion: 2,
     runningLogs: [],
     runningPrs: [],
     weightLogs: [],
@@ -97,7 +151,20 @@ function normalizeMottoes(raw: Record<string, unknown>) {
 }
 
 function normalizeMovementLogs(raw: Record<string, unknown>) {
-  return Array.isArray(raw.movementLogs) ? (raw.movementLogs as MovementLog[]) : [];
+  return Array.isArray(raw.movementLogs)
+    ? raw.movementLogs.map((entry) => {
+        const current = entry as Partial<MovementLog>;
+        return {
+          id: current.id ?? createId("movement"),
+          date: (current.date ?? todayKey()) as DateKey,
+          activity: current.activity ?? "soccer",
+          duration: typeof current.duration === "number" ? current.duration : 0,
+          note: current.note,
+          completed: current.completed ?? true,
+          createdAt: current.createdAt ?? new Date().toISOString(),
+        };
+      })
+    : [];
 }
 
 function normalizeWeightLogs(raw: Record<string, unknown>) {
@@ -109,6 +176,7 @@ function normalizeTasks(raw: Record<string, unknown>) {
 }
 
 function normalizeRunningLogs(raw: Record<string, unknown>): RunningLog[] {
+  const version = raw.runningDurationVersion === 2 ? 2 : 1;
   return Array.isArray(raw.runningLogs)
     ? raw.runningLogs.map((log) => {
         const current = log as Partial<RunningLog>;
@@ -117,7 +185,12 @@ function normalizeRunningLogs(raw: Record<string, unknown>): RunningLog[] {
           date: (current.date ?? todayKey()) as DateKey,
           distance: typeof current.distance === "number" ? current.distance : 0,
           unit: current.unit === "km" ? "km" : "mi",
-          duration: typeof current.duration === "number" ? current.duration : 0,
+          duration:
+            typeof current.duration === "number"
+              ? version === 2
+                ? current.duration
+                : current.duration * 60
+              : 0,
           pace: current.pace,
           runType: current.runType ?? "easy",
           notes: current.notes,
@@ -223,11 +296,12 @@ function normalizeState(input: unknown): AppState {
     languageLogs,
     activeLanguageSession,
     movementLogs: normalizeMovementLogs(raw),
+    runningDurationVersion: 2,
     runningLogs: normalizeRunningLogs(raw),
     runningPrs: normalizeRunningPrs(raw),
     weightStart: typeof raw.weightStart === "number" ? raw.weightStart : undefined,
     weightLogs: normalizeWeightLogs(raw),
-    tasks: normalizeTasks(raw),
+    tasks: ensureRecurringTasks(normalizeTasks(raw)),
     habits,
   };
 }
@@ -247,13 +321,14 @@ type StoreContextValue = {
     addLanguageMinutes: (languageId: string, minutes: number, dateKey?: DateKey, note?: string) => void;
     updateLanguageLog: (logId: string, minutes: number, note?: string) => void;
     deleteLanguageLog: (logId: string) => void;
-    addHabit: (name: string) => void;
+    addHabit: (name: string, startDateKey?: DateKey) => void;
     updateHabit: (habitId: string, name: string) => void;
+    updateHabitStartDate: (habitId: string, dateKey: DateKey) => void;
     deleteHabit: (habitId: string) => void;
     toggleHabitDay: (habitId: string, dateKey: DateKey, value: boolean) => void;
     resetHabit: (habitId: string) => void;
-    addMovementLog: (duration: number, note?: string, dateKey?: DateKey) => void;
-    updateMovementLog: (logId: string, duration: number, note?: string) => void;
+    addMovementLog: (activity: string, duration: number, note?: string, dateKey?: DateKey) => void;
+    updateMovementLog: (logId: string, activity: string, duration: number, note?: string) => void;
     deleteMovementLog: (logId: string) => void;
     addRunningLog: (payload: {
       date?: DateKey;
@@ -274,8 +349,8 @@ type StoreContextValue = {
     updateWeightEntry: (entryId: string, weight: number, dateKey?: DateKey) => void;
     deleteWeightEntry: (entryId: string) => void;
     setWeightStart: (weight: number) => void;
-    addTask: (title: string, dueDate: DateKey) => void;
-    updateTask: (taskId: string, title: string, dueDate: DateKey) => void;
+    addTask: (title: string, dueDate: DateKey, recurrence?: Task["recurrence"]) => void;
+    updateTask: (taskId: string, title: string, dueDate: DateKey, recurrence?: Task["recurrence"]) => void;
     deleteTask: (taskId: string) => void;
     toggleTask: (taskId: string) => void;
     addMotto: (latin: string, english: string) => void;
@@ -437,12 +512,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           languageLogs: current.languageLogs.filter((log) => log.id !== logId),
         }));
       },
-      addHabit(name: string) {
+      addHabit(name: string, startDateKey = todayKey()) {
         const trimmed = name.trim();
         if (!trimmed) return;
         setState((current) => ({
           ...current,
-          habits: [...current.habits, createDefaultHabit(trimmed)],
+          habits: [...current.habits, createDefaultHabit(trimmed, startDateKey)],
         }));
       },
       updateHabit(habitId: string, name: string) {
@@ -452,6 +527,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ...current,
           habits: current.habits.map((habit) =>
             habit.id === habitId ? { ...habit, name: trimmed } : habit,
+          ),
+        }));
+      },
+      updateHabitStartDate(habitId: string, dateKey: DateKey) {
+        setState((current) => ({
+          ...current,
+          habits: current.habits.map((habit) =>
+            habit.id === habitId
+              ? {
+                  ...habit,
+                  currentStartAt: isoFromDateKey(dateKey),
+                  cleanDays: {
+                    ...habit.cleanDays,
+                    [todayKey()]: true,
+                    [dateKey]: true,
+                  },
+                }
+              : habit,
           ),
         }));
       },
@@ -499,13 +592,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ),
         }));
       },
-      addMovementLog(duration: number, note?: string, dateKey = todayKey()) {
+      addMovementLog(activity: string, duration: number, note?: string, dateKey = todayKey()) {
         setState((current) => ({
           ...current,
           movementLogs: [
             {
               id: createId("movement"),
               date: dateKey,
+              activity,
               duration,
               note,
               completed: true,
@@ -515,11 +609,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ],
         }));
       },
-      updateMovementLog(logId: string, duration: number, note?: string) {
+      updateMovementLog(logId: string, activity: string, duration: number, note?: string) {
         setState((current) => ({
           ...current,
           movementLogs: current.movementLogs.map((log) =>
-            log.id === logId ? { ...log, duration, note } : log,
+            log.id === logId ? { ...log, activity, duration, note } : log,
           ),
         }));
       },
@@ -650,25 +744,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           weightStart: weight,
         }));
       },
-      addTask(title: string, dueDate: DateKey) {
+      addTask(title: string, dueDate: DateKey, recurrence?: Task["recurrence"]) {
         setState((current) => ({
           ...current,
-          tasks: [
+          tasks: ensureRecurringTasks([
             {
               id: createId("task"),
               title,
               dueDate,
+              recurrence,
+              recurringTaskId: recurrence ? createRecurringTaskId() : undefined,
               createdAt: new Date().toISOString(),
             },
             ...current.tasks,
-          ],
+          ]),
         }));
       },
-      updateTask(taskId: string, title: string, dueDate: DateKey) {
+      updateTask(taskId: string, title: string, dueDate: DateKey, recurrence?: Task["recurrence"]) {
         setState((current) => ({
           ...current,
           tasks: current.tasks.map((task) =>
-            task.id === taskId ? { ...task, title, dueDate } : task,
+            task.id === taskId
+              ? {
+                  ...task,
+                  title,
+                  dueDate,
+                  recurrence,
+                  recurringTaskId:
+                    recurrence ? task.recurringTaskId ?? createRecurringTaskId() : undefined,
+                }
+              : task,
           ),
         }));
       },
@@ -679,17 +784,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }));
       },
       toggleTask(taskId: string) {
-        setState((current) => ({
-          ...current,
-          tasks: current.tasks.map((task) =>
+        setState((current) => {
+          const nextTasks = current.tasks.map((task) =>
             task.id === taskId
               ? {
                   ...task,
                   completedAt: task.completedAt ? undefined : new Date().toISOString(),
                 }
               : task,
-          ),
-        }));
+          );
+
+          const toggled = nextTasks.find((task) => task.id === taskId);
+          if (
+            toggled &&
+            toggled.completedAt &&
+            toggled.recurrence &&
+            toggled.recurringTaskId &&
+            !nextTasks.some(
+              (task) =>
+                task.recurringTaskId === toggled.recurringTaskId &&
+                !task.completedAt &&
+                task.id !== toggled.id,
+            )
+          ) {
+            nextTasks.unshift({
+              id: createId("task"),
+              title: toggled.title,
+              dueDate: getNextDueDate(toggled.dueDate, toggled.recurrence),
+              recurrence: toggled.recurrence,
+              recurringTaskId: toggled.recurringTaskId,
+              createdAt: new Date().toISOString(),
+            });
+          }
+
+          return {
+            ...current,
+            tasks: ensureRecurringTasks(nextTasks),
+          };
+        });
       },
       addMotto(latin: string, english: string) {
         const trimmedLatin = latin.trim();

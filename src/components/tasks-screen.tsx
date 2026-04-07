@@ -11,6 +11,7 @@ function TaskCard({
   title,
   date,
   completed,
+  recurrence,
   onToggle,
   onEdit,
   onDelete,
@@ -18,6 +19,7 @@ function TaskCard({
   title: string;
   date: string;
   completed: boolean;
+  recurrence?: "daily" | "weekly" | "monthly";
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -27,7 +29,9 @@ function TaskCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className={`text-base font-medium ${completed ? "text-muted line-through" : "text-white"}`}>{title}</p>
-          <p className="mt-1 text-sm text-muted/85">Due {date}</p>
+          <p className="mt-1 text-sm text-muted/85">
+            Due {date}{recurrence ? ` • repeats ${recurrence}` : ""}
+          </p>
           <div className="mt-2 flex gap-3">
             <button className="text-xs text-blue-100/80" onClick={onEdit} type="button">
               Edit
@@ -56,6 +60,7 @@ export function TasksScreen() {
   const { state, actions } = useAppStore();
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState<DateKey>(todayKey());
+  const [recurrence, setRecurrence] = useState<"" | "daily" | "weekly" | "monthly">("");
   const [view, setView] = useState<"list" | "planner">("list");
   const [month, setMonth] = useState(() => {
     const now = new Date();
@@ -70,12 +75,20 @@ export function TasksScreen() {
   const days = useMemo(() => plannerGrid(month), [month]);
   const selectedDayTasks = getTasksForDate(state, selectedDay);
 
-  function editTask(taskId: string, currentTitle: string, currentDueDate: DateKey) {
+  function editTask(taskId: string, currentTitle: string, currentDueDate: DateKey, currentRecurrence?: "daily" | "weekly" | "monthly") {
     const nextTitle = window.prompt("Edit task", currentTitle);
     if (!nextTitle) return;
     const nextDueDate = window.prompt("Edit due date (YYYY-MM-DD)", currentDueDate);
     if (!nextDueDate) return;
-    actions.updateTask(taskId, nextTitle, nextDueDate as DateKey);
+    const nextRecurrence = window.prompt("Edit recurrence (daily, weekly, monthly, or blank)", currentRecurrence ?? "");
+    actions.updateTask(
+      taskId,
+      nextTitle,
+      nextDueDate as DateKey,
+      nextRecurrence === "daily" || nextRecurrence === "weekly" || nextRecurrence === "monthly"
+        ? nextRecurrence
+        : undefined,
+    );
   }
 
   function deleteTask(taskId: string, title: string) {
@@ -111,9 +124,10 @@ export function TasksScreen() {
             onSubmit={(event) => {
               event.preventDefault();
               if (!title.trim()) return;
-              actions.addTask(title.trim(), dueDate);
+              actions.addTask(title.trim(), dueDate, recurrence || undefined);
               setTitle("");
               setDueDate(today);
+              setRecurrence("");
             }}
           >
             <Field label="Task">
@@ -121,6 +135,18 @@ export function TasksScreen() {
             </Field>
             <Field label="Due date">
               <Input onChange={(event) => setDueDate(event.target.value as DateKey)} type="date" value={dueDate} />
+            </Field>
+            <Field label="Repeats">
+              <select
+                className="w-full rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3 text-base text-foreground"
+                onChange={(event) => setRecurrence(event.target.value as "" | "daily" | "weekly" | "monthly")}
+                value={recurrence}
+              >
+                <option value="">Does not repeat</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
             </Field>
             <PillButton type="submit">Add task</PillButton>
           </form>
@@ -138,8 +164,9 @@ export function TasksScreen() {
                       date={task.dueDate}
                       key={task.id}
                       onDelete={() => deleteTask(task.id, task.title)}
-                      onEdit={() => editTask(task.id, task.title, task.dueDate)}
+                      onEdit={() => editTask(task.id, task.title, task.dueDate, task.recurrence)}
                       onToggle={() => actions.toggleTask(task.id)}
+                      recurrence={task.recurrence}
                       title={task.title}
                     />
                   ))
@@ -161,8 +188,9 @@ export function TasksScreen() {
                       date={task.dueDate}
                       key={task.id}
                       onDelete={() => deleteTask(task.id, task.title)}
-                      onEdit={() => editTask(task.id, task.title, task.dueDate)}
+                      onEdit={() => editTask(task.id, task.title, task.dueDate, task.recurrence)}
                       onToggle={() => actions.toggleTask(task.id)}
+                      recurrence={task.recurrence}
                       title={task.title}
                     />
                   ))
@@ -184,8 +212,9 @@ export function TasksScreen() {
                       date={task.dueDate}
                       key={task.id}
                       onDelete={() => deleteTask(task.id, task.title)}
-                      onEdit={() => editTask(task.id, task.title, task.dueDate)}
+                      onEdit={() => editTask(task.id, task.title, task.dueDate, task.recurrence)}
                       onToggle={() => actions.toggleTask(task.id)}
+                      recurrence={task.recurrence}
                       title={task.title}
                     />
                   ))
@@ -264,8 +293,9 @@ export function TasksScreen() {
                       date={task.dueDate}
                       key={task.id}
                       onDelete={() => deleteTask(task.id, task.title)}
-                      onEdit={() => editTask(task.id, task.title, task.dueDate)}
+                      onEdit={() => editTask(task.id, task.title, task.dueDate, task.recurrence)}
                       onToggle={() => actions.toggleTask(task.id)}
+                      recurrence={task.recurrence}
                       title={task.title}
                     />
                   ))

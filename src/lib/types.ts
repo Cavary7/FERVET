@@ -27,6 +27,7 @@ export type Language = {
 export type MovementLog = {
   id: string;
   date: DateKey;
+  activity: string;
   duration: number;
   note?: string;
   completed: boolean;
@@ -69,6 +70,8 @@ export type Task = {
   dueDate: DateKey;
   createdAt: string;
   completedAt?: string;
+  recurrence?: "daily" | "weekly" | "monthly";
+  recurringTaskId?: string;
 };
 
 export type HabitReset = {
@@ -96,6 +99,7 @@ export type AppState = {
     startedAt: string;
   };
   movementLogs: MovementLog[];
+  runningDurationVersion: 2;
   runningLogs: RunningLog[];
   runningPrs: RunningPr[];
   weightStart?: number;

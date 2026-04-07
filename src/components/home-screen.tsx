@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { RUN_TYPES } from "@/lib/constants";
-import { formatTimeSince, todayKey } from "@/lib/date";
+import { formatDurationSeconds, formatTimeSince, todayKey } from "@/lib/date";
 import {
   getDayCompletion,
   getHabitStreak,
@@ -19,22 +19,25 @@ import { Card, Input, MetricCard, PillButton, SectionTitle, Select, Shell, Texta
 
 export function HomeScreen() {
   const { state, actions, now, hydrated } = useAppStore();
+  const today = todayKey();
   const [showRunningLogger, setShowRunningLogger] = useState(false);
   const [showHabits, setShowHabits] = useState(false);
   const [newLanguageName, setNewLanguageName] = useState("");
   const [newHabitName, setNewHabitName] = useState("");
+  const [newHabitStartDate, setNewHabitStartDate] = useState(today);
   const [manualMinutes, setManualMinutes] = useState("20");
   const [languageNote, setLanguageNote] = useState("");
+  const [activityName, setActivityName] = useState("soccer");
   const [movementDuration, setMovementDuration] = useState("45");
   const [movementNote, setMovementNote] = useState("");
   const [weightInput, setWeightInput] = useState("");
   const [runDistance, setRunDistance] = useState("");
-  const [runDuration, setRunDuration] = useState("");
+  const [runMinutes, setRunMinutes] = useState("");
+  const [runSeconds, setRunSeconds] = useState("");
   const [runPace, setRunPace] = useState("");
   const [runType, setRunType] = useState<string>("easy");
   const [runUnit, setRunUnit] = useState<"mi" | "km">("mi");
   const [runNotes, setRunNotes] = useState("");
-  const today = todayKey();
 
   const selectedLanguageId = state.selectedLanguageId ?? state.languages[0]?.id;
   const selectedLanguage =
@@ -97,6 +100,13 @@ export function HomeScreen() {
     actions.updateHabit(habitId, next);
   }
 
+  function editHabitStartDate(habitId: string, currentIso: string) {
+    const currentDate = currentIso.slice(0, 10);
+    const next = window.prompt("Set clean start date (YYYY-MM-DD)", currentDate);
+    if (!next) return;
+    actions.updateHabitStartDate(habitId, next as typeof today);
+  }
+
   function deleteHabit(habitId: string, name: string) {
     if (!window.confirm(`Delete ${name}?`)) return;
     actions.deleteHabit(habitId);
@@ -104,8 +114,16 @@ export function HomeScreen() {
 
   function addRun() {
     const distance = Number(runDistance);
-    const duration = Number(runDuration);
-    if (!Number.isFinite(distance) || distance <= 0 || !Number.isFinite(duration) || duration <= 0) {
+    const minutes = Number(runMinutes || "0");
+    const seconds = Number(runSeconds || "0");
+    const duration = minutes * 60 + seconds;
+    if (
+      !Number.isFinite(distance) ||
+      distance <= 0 ||
+      !Number.isFinite(minutes) ||
+      !Number.isFinite(seconds) ||
+      duration <= 0
+    ) {
       return;
     }
     actions.addRunningLog({
@@ -117,7 +135,8 @@ export function HomeScreen() {
       notes: runNotes || undefined,
     });
     setRunDistance("");
-    setRunDuration("");
+    setRunMinutes("");
+    setRunSeconds("");
     setRunPace("");
     setRunNotes("");
   }
@@ -295,20 +314,21 @@ export function HomeScreen() {
 
             <div className="grid grid-cols-2 gap-3">
               <Card>
-                <p className="text-base font-medium text-white">Movement / soccer</p>
-                <p className="mt-1 text-sm text-muted/90">One clean session keeps the day moving.</p>
+                <p className="text-base font-medium text-white">Activity</p>
+                <p className="mt-1 text-sm text-muted/90">Log any training, exercise, or physical activity.</p>
                 <div className="mt-4 space-y-3">
+                  <Input onChange={(event) => setActivityName(event.target.value)} placeholder="Activity name" value={activityName} />
                   <Input min="1" onChange={(event) => setMovementDuration(event.target.value)} type="number" value={movementDuration} />
                   <Textarea onChange={(event) => setMovementNote(event.target.value)} placeholder="Optional note" value={movementNote} />
                   <PillButton
                     onClick={() => {
                       const duration = Number(movementDuration);
                       if (!Number.isFinite(duration) || duration <= 0) return;
-                      actions.addMovementLog(duration, movementNote);
+                      actions.addMovementLog(activityName || "activity", duration, movementNote);
                       setMovementNote("");
                     }}
                   >
-                    Log session
+                    Log activity
                   </PillButton>
                 </div>
               </Card>
@@ -362,7 +382,15 @@ export function HomeScreen() {
                     </Select>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <Input inputMode="numeric" onChange={(event) => setRunDuration(event.target.value)} placeholder="Duration (min)" value={runDuration} />
+                    <Input inputMode="numeric" onChange={(event) => setRunMinutes(event.target.value)} placeholder="Minutes" value={runMinutes} />
+                    <Input inputMode="numeric" max="59" onChange={(event) => setRunSeconds(event.target.value)} placeholder="Seconds" value={runSeconds} />
+                  </div>
+                  <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-2">
+                    <p className="text-xs text-muted/80">
+                      Duration preview: {formatDurationSeconds((Number(runMinutes || "0") * 60) + Number(runSeconds || "0"))}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3">
                     <Input onChange={(event) => setRunPace(event.target.value)} placeholder="Pace (optional)" value={runPace} />
                   </div>
                   <Select onChange={(event) => setRunType(event.target.value)} value={runType}>
@@ -397,12 +425,14 @@ export function HomeScreen() {
             }
           />
           <Card>
-            <div className="grid grid-cols-[1fr_auto] gap-3">
+            <div className="grid gap-3">
               <Input onChange={(event) => setNewHabitName(event.target.value)} placeholder="Add habit" value={newHabitName} />
+              <Input onChange={(event) => setNewHabitStartDate(event.target.value as typeof today)} type="date" value={newHabitStartDate} />
               <PillButton
                 onClick={() => {
-                  actions.addHabit(newHabitName);
+                  actions.addHabit(newHabitName, newHabitStartDate as typeof today);
                   setNewHabitName("");
+                  setNewHabitStartDate(today);
                 }}
               >
                 Add
@@ -425,6 +455,9 @@ export function HomeScreen() {
                       <div className="flex gap-2">
                         <PillButton onClick={() => renameHabit(habit.id, habit.name)} variant="ghost">
                           Edit
+                        </PillButton>
+                        <PillButton onClick={() => editHabitStartDate(habit.id, habit.currentStartAt)} variant="ghost">
+                          Start
                         </PillButton>
                         <PillButton onClick={() => actions.resetHabit(habit.id)} variant="danger">
                           Reset

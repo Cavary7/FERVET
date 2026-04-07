@@ -3,6 +3,7 @@ import {
   addDaysToKey,
   daysBetween,
   eachDayOfInterval,
+  formatDurationSeconds,
   formatDateLabel,
   fromDateKey,
   getWeekStart,
@@ -212,7 +213,9 @@ export function getWeeklyRunningSummary(state: AppState) {
   );
   const totalDuration = runs.reduce((sum, run) => sum + run.duration, 0);
   const averagePace =
-    totalMiles > 0 && totalDuration > 0 ? `${Math.round(totalDuration / totalMiles)} min/mi` : undefined;
+    totalMiles > 0 && totalDuration > 0
+      ? `${formatDurationSeconds(Math.round(totalDuration / totalMiles))}/mi`
+      : undefined;
 
   return {
     runs,
