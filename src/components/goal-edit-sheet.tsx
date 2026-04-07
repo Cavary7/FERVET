@@ -24,7 +24,7 @@ export function GoalEditSheet({
   onDelete,
 }: {
   open: boolean;
-  goal?: Goal & { currentValue: number; percent: number; supporting: string };
+  goal?: Goal;
   languages: { id: string; name: string }[];
   subjects: { id: string; name: string }[];
   habits: { id: string; name: string }[];
@@ -50,7 +50,7 @@ export function GoalEditSheet({
     setTitle(goal.title);
     setTargetValue(String(goal.targetValue));
     setUnit(goal.unit);
-    setCurrentValue(String(goal.mode === "manual" ? goal.currentValue : goal.currentValue));
+    setCurrentValue(String(goal.mode === "manual" ? goal.currentValue : ""));
     setTimeframe(goal.timeframe);
     setTargetDate(goal.targetDate ?? "");
     setShowDeleteConfirm(false);
@@ -102,12 +102,53 @@ export function GoalEditSheet({
 
   return (
     <BottomSheet
+      footer={
+        showDeleteConfirm ? (
+          <div className="rounded-[18px] border border-red-400/12 bg-red-500/10 p-3">
+            <p className="text-sm text-red-100">Delete this goal immediately?</p>
+            <div className="mt-3 flex gap-3">
+              <PillButton
+                onClick={() => {
+                  if (!goal) return;
+                  onDelete(goal.id);
+                  setShowDeleteConfirm(false);
+                  onClose();
+                }}
+                variant="danger"
+              >
+                Delete goal
+              </PillButton>
+              <PillButton onClick={() => setShowDeleteConfirm(false)} variant="ghost">
+                Cancel
+              </PillButton>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex gap-3">
+              <PillButton disabled={!canSave} onClick={handleSave}>
+                Save changes
+              </PillButton>
+              <PillButton onClick={onClose} variant="ghost">
+                Cancel
+              </PillButton>
+            </div>
+            <button
+              className="mt-3 text-sm text-red-200"
+              onClick={() => setShowDeleteConfirm(true)}
+              type="button"
+            >
+              Delete goal
+            </button>
+          </>
+        )
+      }
       onClose={onClose}
       open={open}
       subtitle="Update the goal details without leaving the flow."
       title="Edit goal"
     >
-      <div className="space-y-4 pb-24">
+      <div className="space-y-4 pb-2">
         <div className="rounded-[20px] border border-white/8 bg-white/[0.03] px-3 py-3">
           <p className="text-xs uppercase tracking-[0.18em] text-blue-100/45">
             {goal?.mode === "linked" ? "Linked goal" : "Manual goal"}
@@ -198,47 +239,6 @@ export function GoalEditSheet({
             <Input onChange={(event) => setTargetDate(event.target.value)} type="date" value={targetDate} />
           </Field>
         ) : null}
-      </div>
-      <div className="sticky bottom-[-1px] -mx-4 mt-4 border-t border-white/8 bg-[linear-gradient(180deg,rgba(16,28,48,0.98),rgba(8,14,26,0.99))] px-4 pb-[calc(env(safe-area-inset-bottom,0px)+0.9rem)] pt-4">
-        {showDeleteConfirm ? (
-          <div className="rounded-[18px] border border-red-400/12 bg-red-500/10 p-3">
-            <p className="text-sm text-red-100">Delete this goal immediately?</p>
-            <div className="mt-3 flex gap-3">
-              <PillButton
-                onClick={() => {
-                  if (!goal) return;
-                  onDelete(goal.id);
-                  setShowDeleteConfirm(false);
-                  onClose();
-                }}
-                variant="danger"
-              >
-                Delete goal
-              </PillButton>
-              <PillButton onClick={() => setShowDeleteConfirm(false)} variant="ghost">
-                Cancel
-              </PillButton>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="flex gap-3">
-              <PillButton disabled={!canSave} onClick={handleSave}>
-                Save changes
-              </PillButton>
-              <PillButton onClick={onClose} variant="ghost">
-                Cancel
-              </PillButton>
-            </div>
-            <button
-              className="mt-3 text-sm text-red-200"
-              onClick={() => setShowDeleteConfirm(true)}
-              type="button"
-            >
-              Delete goal
-            </button>
-          </>
-        )}
       </div>
     </BottomSheet>
   );

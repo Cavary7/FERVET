@@ -235,12 +235,14 @@ export function BottomSheet({
   title,
   subtitle,
   children,
+  footer,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   subtitle?: string;
   children: ReactNode;
+  footer?: ReactNode;
 }) {
   if (!open) return null;
 
@@ -258,7 +260,12 @@ export function BottomSheet({
           <p className="text-lg font-semibold tracking-[-0.03em] text-white">{title}</p>
           {subtitle ? <p className="mt-1 text-sm text-muted/85">{subtitle}</p> : null}
         </div>
-        <div className="max-h-[72vh] overflow-y-auto pr-1">{children}</div>
+        <div className={`${footer ? "max-h-[56vh]" : "max-h-[72vh]"} overflow-y-auto pr-1`}>{children}</div>
+        {footer ? (
+          <div className="-mx-4 mt-4 border-t border-white/8 bg-[linear-gradient(180deg,rgba(16,28,48,0.98),rgba(8,14,26,0.99))] px-4 pb-[calc(env(safe-area-inset-bottom,0px)+0.9rem)] pt-4">
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -61,7 +61,7 @@ export function GoalsScreen() {
   const [languageId, setLanguageId] = useState(state.selectedLanguageId ?? state.languages[0]?.id ?? "");
   const [subjectId, setSubjectId] = useState(state.selectedSubjectId ?? state.subjects[0]?.id ?? "");
   const [habitId, setHabitId] = useState(state.habits[0]?.id ?? "");
-  const editingGoal = summaries.find((goal) => goal.id === editingGoalId);
+  const editingGoal = state.goals.find((goal) => goal.id === editingGoalId);
 
   const suggestedTitle = useMemo(() => {
     if (mode === "manual") return title;
