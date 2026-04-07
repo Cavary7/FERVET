@@ -107,8 +107,8 @@ export function HomeScreen() {
   const progressItems = [
     {
       label: "Language",
-      detail: `${daily.languageMinutes}/20 min`,
-      complete: daily.languageMinutes >= 20,
+      detail: daily.languageMinutes > 0 ? `${daily.languageMinutes} min logged` : "Log at least once",
+      complete: daily.languageMinutes > 0,
     },
     {
       label: "School",
@@ -122,7 +122,10 @@ export function HomeScreen() {
     },
     {
       label: "Tasks",
-      detail: daily.tasksDone ? "Done" : "Pending",
+      detail:
+        daily.dailyTasksTotal > 0
+          ? `${daily.dailyTasksComplete}/${daily.dailyTasksTotal} daily tasks`
+          : "No daily tasks set",
       complete: daily.tasksDone,
     },
     {
@@ -245,7 +248,7 @@ export function HomeScreen() {
         </Card>
 
         <section>
-          <SectionTitle title="Daily minimum" subtitle="A cleaner view of what still matters today." />
+          <SectionTitle title="Daily minimum" subtitle="A full day requires language, school study, activity, clean habits, and every daily task." />
           <Card className="space-y-3">
             {progressItems.map((item) => (
               <div

@@ -31,7 +31,12 @@ function TaskCard({
         <div>
           <p className={`text-base font-medium ${completed ? "text-muted line-through" : "text-white"}`}>{title}</p>
           <p className="mt-1 text-sm text-muted/85">
-            Due {date}{recurrence ? ` • repeats ${recurrence}` : ""}
+            Due {date}
+            {recurrence === "daily"
+              ? " • daily task"
+              : recurrence
+                ? ` • repeats ${recurrence}`
+                : ""}
           </p>
           <div className="mt-2 flex gap-3">
             <button className="text-xs text-blue-100/80" onClick={onEdit} type="button">

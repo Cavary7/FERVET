@@ -33,6 +33,14 @@ function labelForTimeframe(timeframe: GoalTimeframe) {
   return "Open-ended";
 }
 
+function statusTone(status: string) {
+  if (status === "Complete") return "border-blue-400/25 bg-blue-500/12 text-blue-100";
+  if (status === "On track") return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
+  if (status === "Behind") return "border-amber-400/20 bg-amber-500/10 text-amber-100";
+  if (status === "Regressing") return "border-red-400/20 bg-red-500/10 text-red-100";
+  return "border-white/8 bg-white/[0.04] text-muted";
+}
+
 export function GoalsScreen() {
   const { state, actions } = useAppStore();
   const summaries = getGoalSummaries(state);
@@ -73,6 +81,16 @@ export function GoalsScreen() {
       return habit ? Math.max(0, Math.round((Date.now() - new Date(habit.currentStartAt).getTime()) / 86_400_000)) : 0;
     }
     if (type === "running") return running.totalDistanceMiles;
+    if (type === "language-study") {
+      return state.languageLogs
+        .filter((log) => !languageId || log.languageId === languageId)
+        .reduce((sum, log) => sum + log.minutes, 0);
+    }
+    if (type === "school-study") {
+      return state.subjectLogs
+        .filter((log) => !subjectId || log.subjectId === subjectId)
+        .reduce((sum, log) => sum + log.minutes, 0);
+    }
     return undefined;
   }
 
@@ -121,7 +139,7 @@ export function GoalsScreen() {
 
   return (
     <Shell>
-      <header className="mb-7">
+      <header className="mb-6">
         <p className="text-[11px] uppercase tracking-[0.28em] text-blue-200/65">Goals</p>
         <h1 className="mt-3 text-white">Aim at something measurable.</h1>
         <p className="mt-3 max-w-xs text-sm text-muted/90">
@@ -129,7 +147,7 @@ export function GoalsScreen() {
         </p>
       </header>
 
-      <div className="space-y-6">
+      <div className="space-y-5">
         <Card>
           <SectionTitle title="Create goal" subtitle="Linked goals stay synced. Manual goals stay flexible." />
           <div className="space-y-3">
@@ -232,33 +250,61 @@ export function GoalsScreen() {
           <div className="space-y-3">
             {summaries.length > 0 ? (
               summaries.map((goal) => (
-                <Card key={goal.id}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
+                <Card className="p-4" key={goal.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
                       <p className="text-lg font-semibold tracking-[-0.03em] text-white">{goal.title}</p>
-                      <p className="mt-1 text-sm text-muted/85">
+                      <p className="mt-1 text-sm text-muted/80">
                         {goal.mode === "linked"
-                          ? goal.linkedType.replace("-", " ")
+                          ? goal.linkedDescription
                           : goal.manualType === "fasting"
-                            ? "manual fasting"
-                            : "manual"}{" "}
-                        • {labelForTimeframe(goal.timeframe)}
+                            ? "Manual fasting goal"
+                            : "Manual goal"}
                       </p>
                     </div>
-                    <p className="text-lg font-semibold text-blue-100">{goal.percent}%</p>
+                    <div className="text-right">
+                      <p className="text-xl font-semibold text-blue-100">{goal.percent}%</p>
+                      <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-blue-100/45">
+                        {labelForTimeframe(goal.timeframe)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${statusTone(goal.status)}`}>
+                      {goal.status}
+                    </span>
+                    {goal.directionText ? (
+                      <span className="rounded-full border border-white/8 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-blue-100/85">
+                        {goal.directionText} {goal.status === "Regressing" ? "back" : "forward"}
+                      </span>
+                    ) : null}
                   </div>
                   <div className="mt-4">
                     <ProgressBar value={goal.percent} />
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-muted/88">
-                    <p>Target: {goal.targetValue} {goal.unit}</p>
-                    <p>Current: {goal.currentValue} {goal.unit}</p>
-                    <p>{goal.supporting}</p>
-                    <p>{goal.targetDate ? `By ${goal.targetDate}` : labelForTimeframe(goal.timeframe)}</p>
+                  <div className="mt-4 space-y-2 text-sm text-muted/88">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-muted/78">Current</p>
+                      <p className="text-right text-white">
+                        {goal.currentValue} {goal.unit}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-muted/78">Target</p>
+                      <p className="text-right text-white">
+                        {goal.targetValue} {goal.unit}
+                      </p>
+                    </div>
+                    <div className="rounded-[20px] border border-white/8 bg-white/[0.03] px-3 py-2">
+                      <p>{goal.supporting}</p>
+                    </div>
+                    {goal.targetDate ? (
+                      <p className="text-xs text-muted/70">Target date: {goal.targetDate}</p>
+                    ) : null}
                   </div>
                   <div className="mt-4 flex gap-3">
                     <button className="text-xs text-blue-100/80" onClick={() => setEditingGoalId(goal.id)} type="button">
-                      {goal.mode === "manual" ? "Edit goal" : "Edit linked goal"}
+                      Edit goal
                     </button>
                   </div>
                 </Card>

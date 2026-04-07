@@ -1,7 +1,5 @@
-import { DAILY_MINIMUMS } from "@/lib/constants";
 import {
   addDaysToKey,
-  addDays,
   daysBetween,
   eachDayOfInterval,
   formatDurationSeconds,
@@ -102,17 +100,22 @@ export function getDayCompletion(state: AppState, dateKey: DateKey) {
   const languageMinutes = getLanguageMinutesForDay(state, dateKey);
   const subjectMinutes = getSubjectMinutesForDay(state, dateKey);
   const movementDone = getMovementForDay(state, dateKey).length > 0;
-  const tasksDone = getCompletedTasksForDay(state.tasks, dateKey).length > 0;
+  const dailyTasks = state.tasks.filter(
+    (task) => task.dueDate === dateKey && task.recurrence === "daily",
+  );
+  const tasksDone = dailyTasks.every((task) => Boolean(task.completedAt));
   const habit = getDailyHabitStatus(state, dateKey);
 
   return {
     languageMinutes,
     subjectMinutes,
     movementDone,
+    dailyTasksTotal: dailyTasks.length,
+    dailyTasksComplete: dailyTasks.filter((task) => task.completedAt).length,
     tasksDone,
     habit,
     complete:
-      languageMinutes >= DAILY_MINIMUMS.languageMinutes &&
+      languageMinutes > 0 &&
       subjectMinutes > 0 &&
       movementDone &&
       tasksDone &&
@@ -430,6 +433,8 @@ function getGoalProgress(goal: Goal, state: AppState) {
       currentValue,
       percent,
       supporting: `${currentValue} / ${goal.targetValue} ${goal.unit}`.trim(),
+      linkedDescription: "Manual goal",
+      progressDelta: undefined,
     };
   }
 
@@ -443,6 +448,8 @@ function getGoalProgress(goal: Goal, state: AppState) {
       currentValue,
       percent,
       supporting: `${currentValue} / ${goal.targetValue} ${goal.unit} • ${Math.abs(remaining).toFixed(1)} ${goal.unit} left`,
+      linkedDescription: "Linked to weight tracker",
+      progressDelta: baseline - currentValue,
     };
   }
 
@@ -456,6 +463,8 @@ function getGoalProgress(goal: Goal, state: AppState) {
       currentValue,
       percent,
       supporting: `${currentValue} / ${goal.targetValue} ${goal.unit} • ${Math.abs(remaining).toFixed(1)} ${goal.unit} left`,
+      linkedDescription: "Linked to waist tracker",
+      progressDelta: baseline - currentValue,
     };
   }
 
@@ -468,6 +477,9 @@ function getGoalProgress(goal: Goal, state: AppState) {
       currentValue: Number(currentValue.toFixed(1)),
       percent: goal.targetValue > 0 ? clampPercent((currentValue / goal.targetValue) * 100) : 0,
       supporting: `${Number(currentValue.toFixed(1))} / ${goal.targetValue} ${goal.unit}`,
+      linkedDescription:
+        goal.timeframe === "this-week" ? "Linked to running this week" : "Linked to running tracker",
+      progressDelta: Number((currentValue - (goal.baselineValue ?? 0)).toFixed(1)),
     };
   }
 
@@ -484,6 +496,8 @@ function getGoalProgress(goal: Goal, state: AppState) {
       currentValue,
       percent: goal.targetValue > 0 ? clampPercent((currentValue / goal.targetValue) * 100) : 0,
       supporting: `${currentValue} / ${goal.targetValue} min`,
+      linkedDescription: "Linked to language study",
+      progressDelta: currentValue - (goal.baselineValue ?? 0),
     };
   }
 
@@ -500,6 +514,8 @@ function getGoalProgress(goal: Goal, state: AppState) {
       currentValue,
       percent: goal.targetValue > 0 ? clampPercent((currentValue / goal.targetValue) * 100) : 0,
       supporting: `${currentValue} / ${goal.targetValue} min`,
+      linkedDescription: "Linked to school study",
+      progressDelta: currentValue - (goal.baselineValue ?? 0),
     };
   }
 
@@ -509,17 +525,55 @@ function getGoalProgress(goal: Goal, state: AppState) {
     currentValue,
     percent: goal.targetValue > 0 ? clampPercent((currentValue / goal.targetValue) * 100) : 0,
     supporting: `${currentValue} / ${goal.targetValue} days clean`,
+    linkedDescription: "Linked to habit streak",
+    progressDelta: currentValue - (goal.baselineValue ?? 0),
   };
 }
 
 export function getGoalSummaries(state: AppState) {
   return state.goals.map((goal) => {
     const progress = getGoalProgress(goal, state);
+    const now = new Date();
+    const week = getWeekRange();
+    const month = getMonthRange();
+    const elapsedRatio =
+      goal.timeframe === "this-week"
+        ? Math.min(
+            1,
+            Math.max(0, (now.getTime() - week.start.getTime()) / Math.max(1, week.end.getTime() - week.start.getTime())),
+          )
+        : goal.timeframe === "this-month"
+          ? Math.min(
+              1,
+              Math.max(0, (now.getTime() - month.start.getTime()) / Math.max(1, month.end.getTime() - month.start.getTime())),
+            )
+          : undefined;
+    const isRegressing =
+      goal.mode === "linked" &&
+      typeof progress.progressDelta === "number" &&
+      progress.progressDelta < 0;
+    const status =
+      progress.percent >= 100
+        ? "Complete"
+        : isRegressing
+          ? "Regressing"
+          : elapsedRatio !== undefined
+            ? progress.percent >= elapsedRatio * 100 - 8
+              ? "On track"
+              : "Behind"
+            : "In progress";
+    const directionText =
+      goal.mode === "linked" && typeof progress.progressDelta === "number" && progress.progressDelta !== 0
+        ? `${progress.progressDelta > 0 ? "+" : ""}${Number(progress.progressDelta.toFixed(1))} ${goal.unit}`
+        : undefined;
     return {
       ...goal,
       currentValue: progress.currentValue,
       percent: progress.percent,
       supporting: progress.supporting,
+      linkedDescription: progress.linkedDescription,
+      status,
+      directionText,
     };
   });
 }
