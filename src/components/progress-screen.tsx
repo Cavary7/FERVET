@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import type { ChangeEvent } from "react";
+import { useRef, useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { BACKUP_APP_NAME, createBackupPayload, isValidBackupPayload } from "@/lib/backup";
 import { RUN_TYPES } from "@/lib/constants";
 import { formatDurationSeconds, todayKey } from "@/lib/date";
 import {
@@ -32,6 +34,9 @@ export function ProgressScreen() {
   const { state, actions } = useAppStore();
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+  const [backupMessage, setBackupMessage] = useState<string | null>(null);
+  const [backupError, setBackupError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const weight = getWeightSummary(state);
   const waist = getWaistSummary(state);
   const languageSummaries = getLanguageSummaries(state);
@@ -41,6 +46,64 @@ export function ProgressScreen() {
   const runningBests = getAutoDetectedRunningBests(state);
   const editingTask = state.tasks.find((task) => task.id === editingTaskId);
   const deletingTask = state.tasks.find((task) => task.id === deletingTaskId);
+
+  function exportData() {
+    try {
+      const payload = createBackupPayload(state);
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const date = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.download = `fervet-backup-${date}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setBackupError(null);
+      setBackupMessage("Backup exported.");
+    } catch {
+      setBackupMessage(null);
+      setBackupError("Export failed. Please try again.");
+    }
+  }
+
+  async function importData(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      if (!isValidBackupPayload(parsed)) {
+        setBackupMessage(null);
+        setBackupError(`That file is not a valid ${BACKUP_APP_NAME} backup.`);
+        event.target.value = "";
+        return;
+      }
+      const proceed = window.confirm(
+        "Restoring a backup will replace your current local Fervet data on this device. Continue?",
+      );
+      if (!proceed) {
+        event.target.value = "";
+        return;
+      }
+      const result = actions.importAppState(parsed.data);
+      if (!result.ok) {
+        setBackupMessage(null);
+        setBackupError(result.error ?? "Import failed.");
+      } else {
+        setBackupError(null);
+        setBackupMessage("Backup restored successfully.");
+      }
+    } catch {
+      setBackupMessage(null);
+      setBackupError("Import failed. Make sure the file is a valid Fervet backup JSON.");
+    } finally {
+      event.target.value = "";
+    }
+  }
 
   function promptUpdateLanguageLog(logId: string, minutes: number, note?: string) {
     const nextMinutes = window.prompt("Edit minutes", String(minutes));
@@ -499,6 +562,46 @@ export function ProgressScreen() {
               </Card>
             )}
           </div>
+        </section>
+
+        <section>
+          <SectionTitle
+            title="Backup & restore"
+            subtitle="Export a full backup or restore from a previous Fervet backup file."
+          />
+          <Card className="space-y-4">
+            <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">
+              <p className="text-sm text-muted/88">
+                Importing a backup replaces current local data on this device. Export first if you want a safety copy before restoring.
+              </p>
+            </div>
+            <div className="grid gap-3">
+              <PillButton onClick={exportData}>Export Data</PillButton>
+              <PillButton
+                onClick={() => fileInputRef.current?.click()}
+                variant="ghost"
+              >
+                Import Data
+              </PillButton>
+              <input
+                accept="application/json,.json"
+                className="hidden"
+                onChange={importData}
+                ref={fileInputRef}
+                type="file"
+              />
+            </div>
+            {backupMessage ? (
+              <div className="rounded-[18px] border border-blue-400/18 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
+                {backupMessage}
+              </div>
+            ) : null}
+            {backupError ? (
+              <div className="rounded-[18px] border border-red-400/12 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                {backupError}
+              </div>
+            ) : null}
+          </Card>
         </section>
 
         <section>

@@ -535,6 +535,7 @@ type StoreContextValue = {
     addGoal: (goal: Goal) => void;
     updateGoal: (goalId: string, updates: Partial<Goal>) => void;
     deleteGoal: (goalId: string) => void;
+    importAppState: (input: unknown) => { ok: boolean; error?: string };
     addMotto: (latin: string, english: string) => void;
     updateMotto: (mottoId: string, latin: string, english: string) => void;
     deleteMotto: (mottoId: string) => void;
@@ -1231,6 +1232,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           goals: current.goals.filter((goal) => goal.id !== goalId),
         }));
       },
+      importAppState(input: unknown) {
+        try {
+          const nextState = normalizeState(input);
+          setState(nextState);
+          return { ok: true };
+        } catch {
+          return { ok: false, error: "Invalid backup data." };
+        }
+      },
       addMotto(latin: string, english: string) {
         const trimmedLatin = latin.trim();
         const trimmedEnglish = english.trim();
@@ -1290,4 +1300,8 @@ export function useAppStore() {
     throw new Error("useAppStore must be used within StoreProvider");
   }
   return context;
+}
+
+export function normalizeImportedState(input: unknown) {
+  return normalizeState(input);
 }
