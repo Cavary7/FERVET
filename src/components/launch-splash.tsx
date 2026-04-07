@@ -62,7 +62,7 @@ export function LaunchSplash() {
     <div
       className={`pointer-events-none fixed inset-0 z-[70] transition duration-700 ${
         visible ? "opacity-100" : "opacity-0"
-      } ${visible ? "" : "hidden"}`}
+      }`}
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_24%),linear-gradient(180deg,#07111f_0%,#040811_100%)]" />
       <div className="absolute inset-0">

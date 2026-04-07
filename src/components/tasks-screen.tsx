@@ -5,6 +5,7 @@ import { addDays, formatLongDate, formatMonthLabel, todayKey, toDateKey } from "
 import { getTasksForDate } from "@/lib/metrics";
 import { useAppStore } from "@/lib/store";
 import { DateKey } from "@/lib/types";
+import { TaskDeleteSheet, TaskEditSheet } from "@/components/task-sheets";
 import { Card, Field, Input, PillButton, SectionTitle, SegmentedControl, Shell } from "@/components/ui";
 
 function TaskCard({
@@ -67,6 +68,8 @@ export function TasksScreen() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDay, setSelectedDay] = useState<DateKey>(todayKey());
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
 
   const today = todayKey();
   const visibleOpenTasks = useMemo(() => {
@@ -88,26 +91,8 @@ export function TasksScreen() {
   const days = useMemo(() => plannerGrid(month), [month]);
   const selectedDayTasks = getTasksForDate(state, selectedDay);
 
-  function editTask(taskId: string, currentTitle: string, currentDueDate: DateKey, currentRecurrence?: "daily" | "weekly" | "monthly") {
-    const nextTitle = window.prompt("Edit task", currentTitle);
-    if (!nextTitle) return;
-    const nextDueDate = window.prompt("Edit due date (YYYY-MM-DD)", currentDueDate);
-    if (!nextDueDate) return;
-    const nextRecurrence = window.prompt("Edit recurrence (daily, weekly, monthly, or blank)", currentRecurrence ?? "");
-    actions.updateTask(
-      taskId,
-      nextTitle,
-      nextDueDate as DateKey,
-      nextRecurrence === "daily" || nextRecurrence === "weekly" || nextRecurrence === "monthly"
-        ? nextRecurrence
-        : undefined,
-    );
-  }
-
-  function deleteTask(taskId: string, title: string) {
-    if (!window.confirm(`Delete "${title}"?`)) return;
-    actions.deleteTask(taskId);
-  }
+  const editingTask = state.tasks.find((task) => task.id === editingTaskId);
+  const deletingTask = state.tasks.find((task) => task.id === deletingTaskId);
 
   return (
     <Shell>
@@ -176,8 +161,8 @@ export function TasksScreen() {
                       completed={false}
                       date={task.dueDate}
                       key={task.id}
-                      onDelete={() => deleteTask(task.id, task.title)}
-                      onEdit={() => editTask(task.id, task.title, task.dueDate, task.recurrence)}
+                      onDelete={() => setDeletingTaskId(task.id)}
+                      onEdit={() => setEditingTaskId(task.id)}
                       onToggle={() => actions.toggleTask(task.id)}
                       recurrence={task.recurrence}
                       title={task.title}
@@ -200,8 +185,8 @@ export function TasksScreen() {
                       completed={false}
                       date={task.dueDate}
                       key={task.id}
-                      onDelete={() => deleteTask(task.id, task.title)}
-                      onEdit={() => editTask(task.id, task.title, task.dueDate, task.recurrence)}
+                      onDelete={() => setDeletingTaskId(task.id)}
+                      onEdit={() => setEditingTaskId(task.id)}
                       onToggle={() => actions.toggleTask(task.id)}
                       recurrence={task.recurrence}
                       title={task.title}
@@ -224,8 +209,8 @@ export function TasksScreen() {
                       completed
                       date={task.dueDate}
                       key={task.id}
-                      onDelete={() => deleteTask(task.id, task.title)}
-                      onEdit={() => editTask(task.id, task.title, task.dueDate, task.recurrence)}
+                      onDelete={() => setDeletingTaskId(task.id)}
+                      onEdit={() => setEditingTaskId(task.id)}
                       onToggle={() => actions.toggleTask(task.id)}
                       recurrence={task.recurrence}
                       title={task.title}
@@ -305,8 +290,8 @@ export function TasksScreen() {
                       completed={Boolean(task.completedAt)}
                       date={task.dueDate}
                       key={task.id}
-                      onDelete={() => deleteTask(task.id, task.title)}
-                      onEdit={() => editTask(task.id, task.title, task.dueDate, task.recurrence)}
+                      onDelete={() => setDeletingTaskId(task.id)}
+                      onEdit={() => setEditingTaskId(task.id)}
                       onToggle={() => actions.toggleTask(task.id)}
                       recurrence={task.recurrence}
                       title={task.title}
@@ -322,6 +307,20 @@ export function TasksScreen() {
           </section>
         )}
       </div>
+      <TaskEditSheet
+        onClose={() => setEditingTaskId(null)}
+        onSave={(taskId, nextTitle, nextDueDate, nextRecurrence, scope) =>
+          actions.updateTask(taskId, nextTitle, nextDueDate, nextRecurrence, scope)
+        }
+        open={Boolean(editingTask)}
+        task={editingTask}
+      />
+      <TaskDeleteSheet
+        onClose={() => setDeletingTaskId(null)}
+        onDelete={(taskId, scope) => actions.deleteTask(taskId, scope)}
+        open={Boolean(deletingTask)}
+        task={deletingTask}
+      />
     </Shell>
   );
 }

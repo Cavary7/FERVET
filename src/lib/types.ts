@@ -97,6 +97,46 @@ export type Task = {
   recurringTaskId?: string;
 };
 
+export type GoalTimeframe = "this-week" | "this-month" | "custom" | "none";
+
+export type LinkedGoalType =
+  | "weight"
+  | "waist"
+  | "running"
+  | "language-study"
+  | "school-study"
+  | "habit";
+
+export type ManualGoalType = "manual" | "fasting";
+
+export type BaseGoal = {
+  id: string;
+  title: string;
+  createdAt: string;
+  targetValue: number;
+  targetDate?: string;
+  timeframe: GoalTimeframe;
+};
+
+export type LinkedGoal = BaseGoal & {
+  mode: "linked";
+  linkedType: LinkedGoalType;
+  unit: string;
+  baselineValue?: number;
+  languageId?: string;
+  subjectId?: string;
+  habitId?: string;
+};
+
+export type ManualGoal = BaseGoal & {
+  mode: "manual";
+  manualType: ManualGoalType;
+  unit: string;
+  currentValue: number;
+};
+
+export type Goal = LinkedGoal | ManualGoal;
+
 export type HabitReset = {
   id: string;
   timestamp: string;
@@ -139,4 +179,5 @@ export type AppState = {
   waistLogs: WaistLog[];
   tasks: Task[];
   habits: Habit[];
+  goals: Goal[];
 };

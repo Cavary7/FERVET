@@ -50,6 +50,9 @@ export function HomeScreen() {
   const [newSubjectName, setNewSubjectName] = useState("");
   const [newHabitName, setNewHabitName] = useState("");
   const [newHabitStartAt, setNewHabitStartAt] = useState(toDateTimeLocalInputValue(new Date().toISOString()));
+  const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
+  const [editingHabitDate, setEditingHabitDate] = useState(today);
+  const [editingHabitTime, setEditingHabitTime] = useState("08:00");
   const [languageManualMinutes, setLanguageManualMinutes] = useState("20");
   const [languageNote, setLanguageNote] = useState("");
   const [subjectManualMinutes, setSubjectManualMinutes] = useState("30");
@@ -108,6 +111,11 @@ export function HomeScreen() {
       complete: daily.languageMinutes >= 20,
     },
     {
+      label: "School",
+      detail: daily.subjectMinutes > 0 ? `${daily.subjectMinutes} min` : "Pending",
+      complete: daily.subjectMinutes > 0,
+    },
+    {
       label: "Activity",
       detail: daily.movementDone ? "Completed" : "Pending",
       complete: daily.movementDone,
@@ -152,15 +160,11 @@ export function HomeScreen() {
     actions.updateHabit(habitId, next);
   }
 
-  function editHabitStartDate(habitId: string, currentIso: string) {
-    const next = window.prompt(
-      "Set clean start date and time (YYYY-MM-DDTHH:MM)",
-      toDateTimeLocalInputValue(currentIso),
-    );
-    if (!next) return;
-    const parsed = new Date(next);
-    if (Number.isNaN(parsed.getTime())) return;
-    actions.updateHabitStartDate(habitId, parsed.toISOString());
+  function openHabitStartEditor(habitId: string, currentIso: string) {
+    const localValue = toDateTimeLocalInputValue(currentIso);
+    setEditingHabitId(habitId);
+    setEditingHabitDate(localValue.slice(0, 10) as typeof today);
+    setEditingHabitTime(localValue.slice(11, 16));
   }
 
   function deleteHabit(habitId: string, name: string) {
@@ -234,7 +238,7 @@ export function HomeScreen() {
             <div className="min-w-28 rounded-[24px] border border-white/10 bg-white/[0.06] px-4 py-4 text-right">
               <p className="text-[11px] uppercase tracking-[0.2em] text-blue-100/50">Focus status</p>
               <p className="mt-2 text-lg font-medium text-white">
-                {progressItems.filter((item) => item.complete).length}/4
+                {progressItems.filter((item) => item.complete).length}/{progressItems.length}
               </p>
             </div>
           </div>
@@ -631,7 +635,7 @@ export function HomeScreen() {
                           <PillButton onClick={() => renameHabit(habit.id, habit.name)} variant="ghost">
                             Edit
                           </PillButton>
-                          <PillButton onClick={() => editHabitStartDate(habit.id, habit.currentStartAt)} variant="ghost">
+                          <PillButton onClick={() => openHabitStartEditor(habit.id, habit.currentStartAt)} variant="ghost">
                             Start
                           </PillButton>
                           <PillButton onClick={() => actions.resetHabit(habit.id)} variant="danger">
@@ -660,6 +664,31 @@ export function HomeScreen() {
                           onClick={() => actions.toggleHabitDay(habit.id, today, !cleanToday)}
                         />
                       </div>
+                      {editingHabitId === habit.id ? (
+                        <div className="mt-4 rounded-[22px] border border-white/8 bg-white/[0.04] p-4">
+                          <p className="text-xs uppercase tracking-[0.18em] text-blue-100/45">Adjust clean start</p>
+                          <div className="mt-3 grid grid-cols-2 gap-3">
+                            <Input onChange={(event) => setEditingHabitDate(event.target.value as typeof today)} type="date" value={editingHabitDate} />
+                            <Input onChange={(event) => setEditingHabitTime(event.target.value)} type="time" value={editingHabitTime} />
+                          </div>
+                          <div className="mt-3 flex gap-3">
+                            <PillButton
+                              onClick={() => {
+                                actions.updateHabitStartDate(
+                                  habit.id,
+                                  new Date(`${editingHabitDate}T${editingHabitTime}`).toISOString(),
+                                );
+                                setEditingHabitId(null);
+                              }}
+                            >
+                              Save
+                            </PillButton>
+                            <PillButton onClick={() => setEditingHabitId(null)} variant="ghost">
+                              Cancel
+                            </PillButton>
+                          </div>
+                        </div>
+                      ) : null}
                       <div className="mt-3 flex justify-end">
                         <button className="text-xs text-red-200" onClick={() => deleteHabit(habit.id, habit.name)} type="button">
                           Delete habit

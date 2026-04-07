@@ -1,6 +1,7 @@
 import { DAILY_MINIMUMS } from "@/lib/constants";
 import {
   addDaysToKey,
+  addDays,
   daysBetween,
   eachDayOfInterval,
   formatDurationSeconds,
@@ -11,7 +12,7 @@ import {
   toDateKey,
   todayKey,
 } from "@/lib/date";
-import { AppState, DateKey, Habit, Motto, Task } from "@/lib/types";
+import { AppState, DateKey, Goal, Habit, Motto, Task } from "@/lib/types";
 
 function hashDateKey(dateKey: DateKey) {
   return dateKey.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
@@ -99,17 +100,20 @@ export function getDailyHabitStatus(state: AppState, dateKey: DateKey) {
 
 export function getDayCompletion(state: AppState, dateKey: DateKey) {
   const languageMinutes = getLanguageMinutesForDay(state, dateKey);
+  const subjectMinutes = getSubjectMinutesForDay(state, dateKey);
   const movementDone = getMovementForDay(state, dateKey).length > 0;
   const tasksDone = getCompletedTasksForDay(state.tasks, dateKey).length > 0;
   const habit = getDailyHabitStatus(state, dateKey);
 
   return {
     languageMinutes,
+    subjectMinutes,
     movementDone,
     tasksDone,
     habit,
     complete:
       languageMinutes >= DAILY_MINIMUMS.languageMinutes &&
+      subjectMinutes > 0 &&
       movementDone &&
       tasksDone &&
       habit.complete,
@@ -142,6 +146,14 @@ export function getWeeklyLanguageMinutes(state: AppState, languageId?: string) {
     .reduce((sum, log) => sum + log.minutes, 0);
 }
 
+export function getWeeklySubjectMinutes(state: AppState, subjectId?: string) {
+  const { start, end } = getWeekRange();
+  const days = new Set(eachDayOfInterval(start, end).map(toDateKey));
+  return state.subjectLogs
+    .filter((log) => days.has(log.date) && (!subjectId || log.subjectId === subjectId))
+    .reduce((sum, log) => sum + log.minutes, 0);
+}
+
 export function getLanguageSummaries(state: AppState) {
   const today = todayKey();
   return state.languages.map((language) => ({
@@ -153,14 +165,10 @@ export function getLanguageSummaries(state: AppState) {
 
 export function getSubjectSummaries(state: AppState) {
   const today = todayKey();
-  const { start, end } = getWeekRange();
-  const days = new Set(eachDayOfInterval(start, end).map(toDateKey));
   return state.subjects.map((subject) => ({
     ...subject,
     todayMinutes: getSubjectMinutesForDay(state, today, subject.id),
-    weekMinutes: state.subjectLogs
-      .filter((log) => log.subjectId === subject.id && days.has(log.date))
-      .reduce((sum, log) => sum + log.minutes, 0),
+    weekMinutes: getWeeklySubjectMinutes(state, subject.id),
   }));
 }
 
@@ -384,4 +392,134 @@ export function getAutoDetectedRunningBests(state: AppState) {
     best5k: exactDistance(5),
     best10k: exactDistance(10),
   };
+}
+
+function getMonthRange() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return { start, end };
+}
+
+function clampPercent(value: number) {
+  return Number(Math.max(0, Math.min(100, value)).toFixed(0));
+}
+
+function getPeriodDays(timeframe: Goal["timeframe"], targetDate?: string) {
+  if (timeframe === "this-week") {
+    const { start, end } = getWeekRange();
+    return new Set(eachDayOfInterval(start, end).map(toDateKey));
+  }
+  if (timeframe === "this-month") {
+    const { start, end } = getMonthRange();
+    return new Set(eachDayOfInterval(start, end).map(toDateKey));
+  }
+  if (timeframe === "custom" && targetDate) {
+    const start = new Date();
+    const end = new Date(targetDate);
+    return new Set(eachDayOfInterval(startOfDay(start), startOfDay(end)).map(toDateKey));
+  }
+  return null;
+}
+
+function getGoalProgress(goal: Goal, state: AppState) {
+  if (goal.mode === "manual") {
+    const currentValue = goal.currentValue;
+    const percent = goal.targetValue > 0 ? clampPercent((currentValue / goal.targetValue) * 100) : 0;
+    return {
+      currentValue,
+      percent,
+      supporting: `${currentValue} / ${goal.targetValue} ${goal.unit}`.trim(),
+    };
+  }
+
+  if (goal.linkedType === "weight") {
+    const currentValue = getWeightSummary(state).current ?? goal.baselineValue ?? 0;
+    const baseline = goal.baselineValue ?? currentValue;
+    const denominator = baseline - goal.targetValue;
+    const percent = denominator > 0 ? clampPercent(((baseline - currentValue) / denominator) * 100) : 0;
+    const remaining = currentValue - goal.targetValue;
+    return {
+      currentValue,
+      percent,
+      supporting: `${currentValue} / ${goal.targetValue} ${goal.unit} • ${Math.abs(remaining).toFixed(1)} ${goal.unit} left`,
+    };
+  }
+
+  if (goal.linkedType === "waist") {
+    const currentValue = getWaistSummary(state).current ?? goal.baselineValue ?? 0;
+    const baseline = goal.baselineValue ?? currentValue;
+    const denominator = baseline - goal.targetValue;
+    const percent = denominator > 0 ? clampPercent(((baseline - currentValue) / denominator) * 100) : 0;
+    const remaining = currentValue - goal.targetValue;
+    return {
+      currentValue,
+      percent,
+      supporting: `${currentValue} / ${goal.targetValue} ${goal.unit} • ${Math.abs(remaining).toFixed(1)} ${goal.unit} left`,
+    };
+  }
+
+  if (goal.linkedType === "running") {
+    const days = getPeriodDays(goal.timeframe, goal.targetDate);
+    const currentValue = state.runningLogs
+      .filter((run) => !days || days.has(run.date))
+      .reduce((sum, run) => sum + convertDistance(run.distance, run.unit, goal.unit === "km" ? "km" : "mi"), 0);
+    return {
+      currentValue: Number(currentValue.toFixed(1)),
+      percent: goal.targetValue > 0 ? clampPercent((currentValue / goal.targetValue) * 100) : 0,
+      supporting: `${Number(currentValue.toFixed(1))} / ${goal.targetValue} ${goal.unit}`,
+    };
+  }
+
+  if (goal.linkedType === "language-study") {
+    const days = getPeriodDays(goal.timeframe, goal.targetDate);
+    const currentValue = state.languageLogs
+      .filter(
+        (log) =>
+          (!goal.languageId || log.languageId === goal.languageId) &&
+          (!days || days.has(log.date)),
+      )
+      .reduce((sum, log) => sum + log.minutes, 0);
+    return {
+      currentValue,
+      percent: goal.targetValue > 0 ? clampPercent((currentValue / goal.targetValue) * 100) : 0,
+      supporting: `${currentValue} / ${goal.targetValue} min`,
+    };
+  }
+
+  if (goal.linkedType === "school-study") {
+    const days = getPeriodDays(goal.timeframe, goal.targetDate);
+    const currentValue = state.subjectLogs
+      .filter(
+        (log) =>
+          (!goal.subjectId || log.subjectId === goal.subjectId) &&
+          (!days || days.has(log.date)),
+      )
+      .reduce((sum, log) => sum + log.minutes, 0);
+    return {
+      currentValue,
+      percent: goal.targetValue > 0 ? clampPercent((currentValue / goal.targetValue) * 100) : 0,
+      supporting: `${currentValue} / ${goal.targetValue} min`,
+    };
+  }
+
+  const habit = state.habits.find((entry) => entry.id === goal.habitId);
+  const currentValue = habit ? getHabitStreak(habit) : 0;
+  return {
+    currentValue,
+    percent: goal.targetValue > 0 ? clampPercent((currentValue / goal.targetValue) * 100) : 0,
+    supporting: `${currentValue} / ${goal.targetValue} days clean`,
+  };
+}
+
+export function getGoalSummaries(state: AppState) {
+  return state.goals.map((goal) => {
+    const progress = getGoalProgress(goal, state);
+    return {
+      ...goal,
+      currentValue: progress.currentValue,
+      percent: progress.percent,
+      supporting: progress.supporting,
+    };
+  });
 }

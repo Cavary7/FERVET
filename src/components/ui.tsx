@@ -216,3 +216,50 @@ export function SegmentedControl<T extends string>({
     </div>
   );
 }
+
+export function ProgressBar({ value }: { value: number }) {
+  const clamped = Math.max(0, Math.min(100, value));
+  return (
+    <div className="h-3 w-full overflow-hidden rounded-full border border-white/8 bg-white/[0.05]">
+      <div
+        className="h-full rounded-full bg-[linear-gradient(90deg,#60a5fa,#2563eb)] shadow-[0_0_18px_rgba(96,165,250,0.35)] transition-all"
+        style={{ width: `${clamped}%` }}
+      />
+    </div>
+  );
+}
+
+export function BottomSheet({
+  open,
+  onClose,
+  title,
+  subtitle,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80]">
+      <button
+        aria-label="Close sheet"
+        className="absolute inset-0 bg-[rgba(2,6,14,0.78)] backdrop-blur-sm"
+        onClick={onClose}
+        type="button"
+      />
+      <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-md rounded-t-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,38,66,0.98),rgba(8,14,26,0.98))] px-4 pb-6 pt-3 shadow-[0_-24px_64px_rgba(0,0,0,0.45)]">
+        <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-white/12" />
+        <div className="mb-4">
+          <p className="text-lg font-semibold tracking-[-0.03em] text-white">{title}</p>
+          {subtitle ? <p className="mt-1 text-sm text-muted/85">{subtitle}</p> : null}
+        </div>
+        <div className="max-h-[70vh] overflow-y-auto pb-safe">{children}</div>
+      </div>
+    </div>
+  );
+}

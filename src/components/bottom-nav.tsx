@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const items = [
   { href: "/", label: "Home" },
   { href: "/calendar", label: "Calendar" },
+  { href: "/goals", label: "Goals" },
   { href: "/progress", label: "Progress" },
   { href: "/tasks", label: "Tasks" },
 ];
@@ -15,7 +16,7 @@ export function BottomNav() {
 
   return (
     <nav className="fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-3xl border border-border bg-panel/95 p-2 shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop-blur">
-      <ul className="grid grid-cols-4 gap-1">
+      <ul className="grid grid-cols-5 gap-1">
         {items.map((item) => {
           const active = pathname === item.href;
           return (

@@ -38,7 +38,7 @@ export default function RootLayout({
 }>) {
   return (
     <html className="dark" lang="en">
-      <body className="bg-background text-foreground">
+      <body className="bg-background text-foreground" style={{ backgroundColor: "#07111f" }}>
         <StoreProvider>
           <PWARegister />
           <LaunchSplash />

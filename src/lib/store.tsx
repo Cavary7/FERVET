@@ -14,6 +14,7 @@ import { loadState, saveState, STORAGE_KEY } from "@/lib/storage";
 import {
   AppState,
   DateKey,
+  Goal,
   Habit,
   Language,
   LanguageLog,
@@ -125,6 +126,7 @@ function ensureRecurringTasks(tasks: Task[]) {
         completedAt: undefined,
         createdAt: new Date().toISOString(),
       });
+      openDates.add(cursor);
     }
   });
 
@@ -152,6 +154,7 @@ function createDefaultState(): AppState {
     waistLogs: [],
     tasks: [],
     habits: [createDefaultHabit()],
+    goals: [],
   };
 }
 
@@ -217,6 +220,65 @@ function normalizeTasks(raw: Record<string, unknown>) {
           };
         })
         .filter((task): task is NonNullable<typeof task> => Boolean(task))
+    : [];
+}
+
+function normalizeGoals(raw: Record<string, unknown>) {
+  return Array.isArray(raw.goals)
+    ? raw.goals.map((entry) => {
+        const current = entry as Partial<Goal> & {
+          manualType?: "manual" | "fasting";
+          currentValue?: number;
+          linkedType?: "weight" | "waist" | "running" | "language-study" | "school-study" | "habit";
+          baselineValue?: number;
+          languageId?: string;
+          subjectId?: string;
+          habitId?: string;
+        };
+        return {
+          id: current.id ?? createId("goal"),
+          title: current.title ?? "Goal",
+          createdAt: current.createdAt ?? new Date().toISOString(),
+          targetValue:
+            typeof current.targetValue === "number" && Number.isFinite(current.targetValue)
+              ? current.targetValue
+              : 0,
+          targetDate: current.targetDate,
+          timeframe:
+            current.timeframe === "this-week" ||
+            current.timeframe === "this-month" ||
+            current.timeframe === "custom"
+              ? current.timeframe
+              : "none",
+          mode: current.mode === "linked" ? "linked" : "manual",
+          ...(current.mode === "linked"
+            ? {
+                linkedType:
+                  current.linkedType === "weight" ||
+                  current.linkedType === "waist" ||
+                  current.linkedType === "running" ||
+                  current.linkedType === "language-study" ||
+                  current.linkedType === "school-study" ||
+                  current.linkedType === "habit"
+                    ? current.linkedType
+                    : "running",
+                unit: current.unit ?? "",
+                baselineValue:
+                  typeof current.baselineValue === "number" ? current.baselineValue : undefined,
+                languageId: current.languageId,
+                subjectId: current.subjectId,
+                habitId: current.habitId,
+              }
+            : {
+                manualType: current.manualType === "fasting" ? "fasting" : "manual",
+                unit: current.unit ?? "",
+                currentValue:
+                  typeof current.currentValue === "number" && Number.isFinite(current.currentValue)
+                    ? current.currentValue
+                    : 0,
+              }),
+        } as Goal;
+      })
     : [];
 }
 
@@ -400,6 +462,7 @@ function normalizeState(input: unknown): AppState {
     waistLogs: normalizeWaistLogs(raw),
     tasks: ensureRecurringTasks(normalizeTasks(raw)),
     habits,
+    goals: normalizeGoals(raw),
   };
 }
 
@@ -460,9 +523,18 @@ type StoreContextValue = {
     deleteWaistEntry: (entryId: string) => void;
     setWaistStart: (inches: number) => void;
     addTask: (title: string, dueDate: DateKey, recurrence?: Task["recurrence"]) => void;
-    updateTask: (taskId: string, title: string, dueDate: DateKey, recurrence?: Task["recurrence"]) => void;
-    deleteTask: (taskId: string) => void;
+    updateTask: (
+      taskId: string,
+      title: string,
+      dueDate: DateKey,
+      recurrence?: Task["recurrence"],
+      scope?: "one" | "following" | "all",
+    ) => void;
+    deleteTask: (taskId: string, scope?: "one" | "following" | "all") => void;
     toggleTask: (taskId: string) => void;
+    addGoal: (goal: Goal) => void;
+    updateGoal: (goalId: string, updates: Partial<Goal>) => void;
+    deleteGoal: (goalId: string) => void;
     addMotto: (latin: string, english: string) => void;
     updateMotto: (mottoId: string, latin: string, english: string) => void;
     deleteMotto: (mottoId: string) => void;
@@ -1014,28 +1086,92 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ]),
         }));
       },
-      updateTask(taskId: string, title: string, dueDate: DateKey, recurrence?: Task["recurrence"]) {
-        setState((current) => ({
-          ...current,
-          tasks: current.tasks.map((task) =>
-            task.id === taskId
-              ? {
-                  ...task,
-                  title,
-                  dueDate,
-                  recurrence,
-                  recurringTaskId:
-                    recurrence ? task.recurringTaskId ?? createRecurringTaskId() : undefined,
-                }
-              : task,
-          ),
-        }));
+      updateTask(
+        taskId: string,
+        title: string,
+        dueDate: DateKey,
+        recurrence?: Task["recurrence"],
+        scope: "one" | "following" | "all" = "one",
+      ) {
+        setState((current) => {
+          const target = current.tasks.find((task) => task.id === taskId);
+          if (!target) return current;
+
+          if (!target.recurringTaskId || scope === "one") {
+            const nextTasks = current.tasks.map((task) =>
+              task.id === taskId
+                ? {
+                    ...task,
+                    title,
+                    dueDate,
+                    recurrence: scope === "one" ? undefined : recurrence,
+                    recurringTaskId:
+                      scope === "one"
+                        ? undefined
+                        : recurrence
+                          ? task.recurringTaskId ?? createRecurringTaskId()
+                          : undefined,
+                  }
+                : task,
+            );
+            return { ...current, tasks: ensureRecurringTasks(nextTasks) };
+          }
+
+          const groupId = target.recurringTaskId;
+          const seriesTasks = current.tasks.filter((task) => task.recurringTaskId === groupId);
+          const preserved =
+            scope === "all"
+              ? current.tasks.filter((task) => task.recurringTaskId !== groupId)
+              : current.tasks.filter(
+                  (task) =>
+                    task.recurringTaskId !== groupId ||
+                    (task.dueDate < target.dueDate && task.recurringTaskId === groupId),
+                );
+
+          const baseTask: Task = {
+            id: createId("task"),
+            title,
+            dueDate,
+            recurrence,
+            recurringTaskId: recurrence ? groupId : undefined,
+            createdAt: new Date().toISOString(),
+          };
+
+          const retainedCompleted =
+            scope === "all"
+              ? []
+              : seriesTasks.filter((task) => task.completedAt && task.dueDate < dueDate);
+
+          return {
+            ...current,
+            tasks: ensureRecurringTasks([baseTask, ...retainedCompleted, ...preserved]),
+          };
+        });
       },
-      deleteTask(taskId: string) {
-        setState((current) => ({
-          ...current,
-          tasks: current.tasks.filter((task) => task.id !== taskId),
-        }));
+      deleteTask(taskId: string, scope: "one" | "following" | "all" = "one") {
+        setState((current) => {
+          const target = current.tasks.find((task) => task.id === taskId);
+          if (!target) return current;
+          if (!target.recurringTaskId || scope === "one") {
+            return {
+              ...current,
+              tasks: current.tasks.filter((task) => task.id !== taskId),
+            };
+          }
+          if (scope === "all") {
+            return {
+              ...current,
+              tasks: current.tasks.filter((task) => task.recurringTaskId !== target.recurringTaskId),
+            };
+          }
+          return {
+            ...current,
+            tasks: current.tasks.filter(
+              (task) =>
+                task.recurringTaskId !== target.recurringTaskId || task.dueDate < target.dueDate,
+            ),
+          };
+        });
       },
       toggleTask(taskId: string) {
         setState((current) => {
@@ -1076,6 +1212,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             tasks: ensureRecurringTasks(nextTasks),
           };
         });
+      },
+      addGoal(goal: Goal) {
+        setState((current) => ({
+          ...current,
+          goals: [{ ...goal, id: goal.id || createId("goal"), createdAt: goal.createdAt || new Date().toISOString() }, ...current.goals],
+        }));
+      },
+      updateGoal(goalId: string, updates: Partial<Goal>) {
+        setState((current) => ({
+          ...current,
+          goals: current.goals.map((goal) => (goal.id === goalId ? { ...goal, ...updates } as Goal : goal)),
+        }));
+      },
+      deleteGoal(goalId: string) {
+        setState((current) => ({
+          ...current,
+          goals: current.goals.filter((goal) => goal.id !== goalId),
+        }));
       },
       addMotto(latin: string, english: string) {
         const trimmedLatin = latin.trim();

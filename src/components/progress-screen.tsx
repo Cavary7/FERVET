@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { RUN_TYPES } from "@/lib/constants";
 import { formatDurationSeconds, todayKey } from "@/lib/date";
@@ -14,11 +15,13 @@ import {
   getWeeklyLanguageMinutes,
   getWeeklyMovementCount,
   getWeeklyRunningSummary,
+  getWeeklySubjectMinutes,
   getWeeklyTaskCount,
   getWeightSummary,
 } from "@/lib/metrics";
 import { useAppStore } from "@/lib/store";
 import { DateKey } from "@/lib/types";
+import { TaskDeleteSheet, TaskEditSheet } from "@/components/task-sheets";
 import { Card, MetricCard, PillButton, SectionTitle, Select, Shell } from "@/components/ui";
 
 function formatRun(run: { distance: number; unit: string; duration: number; runType: string }) {
@@ -27,6 +30,8 @@ function formatRun(run: { distance: number; unit: string; duration: number; runT
 
 export function ProgressScreen() {
   const { state, actions } = useAppStore();
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const weight = getWeightSummary(state);
   const waist = getWaistSummary(state);
   const languageSummaries = getLanguageSummaries(state);
@@ -34,22 +39,8 @@ export function ProgressScreen() {
   const running = getWeeklyRunningSummary(state);
   const runningPerformance = getRunningPerformanceSummary(state);
   const runningBests = getAutoDetectedRunningBests(state);
-
-  function promptUpdateTask(taskId: string, title: string, dueDate: string) {
-    const nextTitle = window.prompt("Edit task", title);
-    if (!nextTitle) return;
-    const nextDueDate = window.prompt("Edit due date (YYYY-MM-DD)", dueDate);
-    if (!nextDueDate) return;
-    const nextRecurrence = window.prompt("Edit recurrence (daily, weekly, monthly, or blank)", "");
-    actions.updateTask(
-      taskId,
-      nextTitle,
-      nextDueDate as DateKey,
-      nextRecurrence === "daily" || nextRecurrence === "weekly" || nextRecurrence === "monthly"
-        ? nextRecurrence
-        : undefined,
-    );
-  }
+  const editingTask = state.tasks.find((task) => task.id === editingTaskId);
+  const deletingTask = state.tasks.find((task) => task.id === deletingTaskId);
 
   function promptUpdateLanguageLog(logId: string, minutes: number, note?: string) {
     const nextMinutes = window.prompt("Edit minutes", String(minutes));
@@ -186,7 +177,8 @@ export function ProgressScreen() {
           <div className="grid grid-cols-2 gap-3">
             <MetricCard label="Overall streak" value={`${getOverallStreak(state)} days`} />
             <MetricCard label="Habits active" value={`${state.habits.length}`} />
-            <MetricCard label="Study this week" value={`${getWeeklyLanguageMinutes(state)} min`} />
+            <MetricCard label="Language study" value={`${getWeeklyLanguageMinutes(state)} min`} hint="This week" />
+            <MetricCard label="School study" value={`${getWeeklySubjectMinutes(state)} min`} hint="This week" />
             <MetricCard label="Activity this week" value={`${getWeeklyMovementCount(state)}`} hint="Sessions" />
             <MetricCard label="Runs this week" value={`${running.runCount}`} hint={`${running.totalDistanceMiles.toFixed(1)} mi`} />
             <MetricCard label="Longest run" value={`${running.longestRunMiles.toFixed(1)} mi`} hint={running.averagePace ?? "No pace yet"} />
@@ -742,14 +734,12 @@ export function ProgressScreen() {
                     <p className="text-sm text-white">{task.title}</p>
                     <p className="text-xs text-muted/80">{task.dueDate}</p>
                     <div className="mt-2 flex gap-3">
-                      <button className="text-xs text-blue-100/80" onClick={() => promptUpdateTask(task.id, task.title, task.dueDate)} type="button">
+                      <button className="text-xs text-blue-100/80" onClick={() => setEditingTaskId(task.id)} type="button">
                         Edit
                       </button>
                       <button
                         className="text-xs text-red-200"
-                        onClick={() => {
-                          if (window.confirm("Delete this task?")) actions.deleteTask(task.id);
-                        }}
+                        onClick={() => setDeletingTaskId(task.id)}
                         type="button"
                       >
                         Delete
@@ -783,6 +773,20 @@ export function ProgressScreen() {
           </Card>
         </section>
       </div>
+      <TaskEditSheet
+        onClose={() => setEditingTaskId(null)}
+        onSave={(taskId, nextTitle, nextDueDate, nextRecurrence, scope) =>
+          actions.updateTask(taskId, nextTitle, nextDueDate, nextRecurrence, scope)
+        }
+        open={Boolean(editingTask)}
+        task={editingTask}
+      />
+      <TaskDeleteSheet
+        onClose={() => setDeletingTaskId(null)}
+        onDelete={(taskId, scope) => actions.deleteTask(taskId, scope)}
+        open={Boolean(deletingTask)}
+        task={deletingTask}
+      />
     </Shell>
   );
 }
