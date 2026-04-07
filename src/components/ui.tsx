@@ -8,7 +8,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="absolute right-[-4rem] top-64 h-56 w-56 rounded-full bg-cyan-400/8 blur-3xl" />
         <div className="absolute bottom-24 left-[-4rem] h-56 w-56 rounded-full bg-blue-700/10 blur-3xl" />
       </div>
-      <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col px-4 pb-24 pt-5">
+      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 pb-28 pt-5 md:px-6 lg:px-8">
         {children}
       </div>
     </div>

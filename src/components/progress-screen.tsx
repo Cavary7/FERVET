@@ -2,7 +2,9 @@
 
 import type { ChangeEvent } from "react";
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useAuth } from "@/lib/auth";
 import { BACKUP_APP_NAME, createBackupPayload, isValidBackupPayload } from "@/lib/backup";
 import { RUN_TYPES } from "@/lib/constants";
 import { formatDateTimeLabel, formatDurationSeconds, todayKey } from "@/lib/date";
@@ -31,7 +33,8 @@ function formatRun(run: { distance: number; unit: string; duration: number; runT
 }
 
 export function ProgressScreen() {
-  const { state, actions } = useAppStore();
+  const { state, actions, syncMode, syncStatus, guestDataAvailable } = useAppStore();
+  const auth = useAuth();
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [backupMessage, setBackupMessage] = useState<string | null>(null);
@@ -237,8 +240,30 @@ export function ProgressScreen() {
       </header>
 
       <div className="space-y-6">
+        <Card className="border-blue-400/12">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.24em] text-blue-100/52">Account</p>
+              <p className="mt-2 text-lg font-medium text-white">
+                {auth.session ? auth.user?.email ?? "Signed in" : "Guest mode"}
+              </p>
+              <p className="mt-1 text-sm text-muted/88">
+                {auth.session
+                  ? `Sync mode: ${syncMode} • Status: ${syncStatus}`
+                  : "Sign in to sync across devices. Local storage and backups still work as-is."}
+              </p>
+              {!auth.session && guestDataAvailable ? (
+                <p className="mt-2 text-xs text-blue-100/72">Local data is available and can be imported after sign-in.</p>
+              ) : null}
+            </div>
+            <Link href="/account">
+              <PillButton>{auth.session ? "Manage account" : "Sign in / create account"}</PillButton>
+            </Link>
+          </div>
+        </Card>
+
         <Card className="border-blue-400/12 bg-[linear-gradient(180deg,rgba(21,49,98,0.55),rgba(10,18,32,0.96))]">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
             <MetricCard label="Overall streak" value={`${getOverallStreak(state)} days`} />
             <MetricCard label="Habits active" value={`${state.habits.length}`} />
             <MetricCard label="Language study" value={`${getWeeklyLanguageMinutes(state)} min`} hint="This week" />
@@ -264,6 +289,7 @@ export function ProgressScreen() {
           </div>
         </Card>
 
+        <div className="grid gap-6 xl:grid-cols-2">
         <section>
           <SectionTitle title="Language totals" subtitle="Per language, with reset controls." />
           <div className="space-y-3">
@@ -309,7 +335,9 @@ export function ProgressScreen() {
             ))}
           </div>
         </section>
+        </div>
 
+        <div className="grid gap-6 xl:grid-cols-2">
         <section>
           <SectionTitle title="Habit streaks" subtitle="Independent trackers with strong emphasis." />
           <div className="grid grid-cols-2 gap-3">
@@ -400,7 +428,9 @@ export function ProgressScreen() {
             )}
           </Card>
         </section>
+        </div>
 
+        <div className="grid gap-6 xl:grid-cols-2">
         <section>
           <SectionTitle
             title="Running bests"
@@ -482,7 +512,9 @@ export function ProgressScreen() {
             )}
           </Card>
         </section>
+        </div>
 
+        <div className="grid gap-6 xl:grid-cols-2">
         <section>
           <SectionTitle title="Waist trend" subtitle="Track your waistline with the same quiet consistency." />
           <Card className="h-80 border-blue-400/12">
@@ -564,6 +596,7 @@ export function ProgressScreen() {
             )}
           </div>
         </section>
+        </div>
 
         <section>
           <SectionTitle

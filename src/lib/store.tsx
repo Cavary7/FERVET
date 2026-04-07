@@ -6,11 +6,22 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { DEFAULT_MOTTOES } from "@/lib/constants";
 import { addDaysToKey, fromDateKey, todayKey, toDateKey } from "@/lib/date";
-import { loadState, saveState, STORAGE_KEY } from "@/lib/storage";
+import { useAuth } from "@/lib/auth";
+import {
+  getAccountStorageKey,
+  loadAccountState,
+  loadState,
+  removeStorageKey,
+  saveAccountState,
+  saveState,
+  STORAGE_KEY,
+} from "@/lib/storage";
+import { fetchUserAppState, upsertUserAppState } from "@/lib/supabase";
 import {
   AppState,
   DateKey,
@@ -169,6 +180,23 @@ function createDefaultState(): AppState {
     habits: [createDefaultHabit()],
     goals: [],
   };
+}
+
+function hasMeaningfulData(state: AppState) {
+  return (
+    state.languageLogs.length > 0 ||
+    state.subjectLogs.length > 0 ||
+    state.movementLogs.length > 0 ||
+    state.runningLogs.length > 0 ||
+    state.weightLogs.length > 0 ||
+    state.waistLogs.length > 0 ||
+    state.tasks.length > 0 ||
+    state.goals.length > 0 ||
+    state.runningPrs.length > 0 ||
+    state.habits.length > 1 ||
+    state.languages.length > 1 ||
+    state.subjects.length > 1
+  );
 }
 
 function normalizeMottoes(raw: Record<string, unknown>) {
@@ -515,6 +543,9 @@ type StoreContextValue = {
   state: AppState;
   hydrated: boolean;
   now: number;
+  syncMode: "guest" | "account";
+  syncStatus: "loading" | "local" | "synced" | "saving" | "error";
+  guestDataAvailable: boolean;
   actions: {
     addLanguage: (name: string) => void;
     updateLanguage: (languageId: string, name: string) => void;
@@ -600,6 +631,7 @@ type StoreContextValue = {
     updateGoal: (goalId: string, updates: Partial<Goal>) => void;
     deleteGoal: (goalId: string) => void;
     importAppState: (input: unknown) => { ok: boolean; error?: string };
+    importLocalDataToAccount: () => Promise<{ ok: boolean; error?: string }>;
     addMotto: (latin: string, english: string) => void;
     updateMotto: (mottoId: string, latin: string, english: string) => void;
     deleteMotto: (mottoId: string) => void;
@@ -611,20 +643,113 @@ type StoreContextValue = {
 const StoreContext = createContext<StoreContextValue | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
+  const auth = useAuth();
   const [state, setState] = useState<AppState>(createDefaultState());
   const [hydrated, setHydrated] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [syncMode, setSyncMode] = useState<"guest" | "account">("guest");
+  const [syncStatus, setSyncStatus] = useState<"loading" | "local" | "synced" | "saving" | "error">(
+    "loading",
+  );
+  const [guestDataAvailable, setGuestDataAvailable] = useState(false);
+  const remoteLoadKeyRef = useRef<string | null>(null);
+  const saveTimeoutRef = useRef<number | null>(null);
+  const initialSyncCompleteRef = useRef(false);
 
   useEffect(() => {
-    setState(normalizeState(loadState(createDefaultState())));
-    setHydrated(true);
-  }, []);
+    if (!auth.ready) return;
 
-  useEffect(() => {
-    if (hydrated) {
-      saveState(state);
+    let cancelled = false;
+    const fallback = createDefaultState();
+
+    async function hydrateStore() {
+      const localState = normalizeState(loadState(fallback));
+      setGuestDataAvailable(hasMeaningfulData(localState));
+
+      if (!auth.session || !auth.user) {
+        remoteLoadKeyRef.current = null;
+        initialSyncCompleteRef.current = false;
+        if (!cancelled) {
+          setSyncMode("guest");
+          setSyncStatus("local");
+          setState(localState);
+          setHydrated(true);
+        }
+        return;
+      }
+
+      const loadKey = `${auth.user.id}:${auth.session.accessToken}`;
+      remoteLoadKeyRef.current = loadKey;
+
+      try {
+        const cachedAccountState = normalizeState(loadAccountState(auth.user.id, localState));
+        if (!cancelled) {
+          setSyncMode("account");
+          setSyncStatus("loading");
+          setState(cachedAccountState);
+          setHydrated(true);
+        }
+
+        const remote = await fetchUserAppState(auth.session.accessToken, auth.user.id);
+        if (cancelled || remoteLoadKeyRef.current !== loadKey) return;
+        const nextState = normalizeState(remote?.data ?? cachedAccountState);
+        saveAccountState(auth.user.id, nextState);
+        initialSyncCompleteRef.current = true;
+        setState(nextState);
+        setSyncStatus("synced");
+        setHydrated(true);
+      } catch {
+        if (cancelled || remoteLoadKeyRef.current !== loadKey) return;
+        initialSyncCompleteRef.current = true;
+        setSyncMode("account");
+        setSyncStatus("error");
+        setState(normalizeState(loadAccountState(auth.user.id, localState)));
+        setHydrated(true);
+      }
     }
-  }, [hydrated, state]);
+
+    hydrateStore();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.ready, auth.session, auth.user]);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+
+    if (syncMode === "guest" || !auth.session || !auth.user) {
+      saveState(state);
+      return;
+    }
+
+    saveAccountState(auth.user.id, state);
+
+    if (!initialSyncCompleteRef.current) {
+      return;
+    }
+
+    if (saveTimeoutRef.current) {
+      window.clearTimeout(saveTimeoutRef.current);
+    }
+
+    setSyncStatus("saving");
+    saveTimeoutRef.current = window.setTimeout(async () => {
+      try {
+        await upsertUserAppState(auth.session!.accessToken, auth.user!.id, state);
+        setSyncStatus("synced");
+      } catch {
+        setSyncStatus("error");
+      }
+    }, 500);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        window.clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [auth.session, auth.user, hydrated, state, syncMode]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -1360,6 +1485,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return { ok: false, error: "Invalid backup data." };
         }
       },
+      async importLocalDataToAccount() {
+        if (!auth.session || !auth.user) {
+          return { ok: false, error: "Sign in first." };
+        }
+        try {
+          const nextState = normalizeState(loadState(createDefaultState()));
+          saveAccountState(auth.user.id, nextState);
+          await upsertUserAppState(auth.session.accessToken, auth.user.id, nextState);
+          initialSyncCompleteRef.current = true;
+          setState(nextState);
+          setGuestDataAvailable(hasMeaningfulData(nextState));
+          setSyncMode("account");
+          setSyncStatus("synced");
+          return { ok: true };
+        } catch {
+          setSyncStatus("error");
+          return { ok: false, error: "Could not import local data into your account." };
+        }
+      },
       addMotto(latin: string, english: string) {
         const trimmedLatin = latin.trim();
         const trimmedEnglish = english.trim();
@@ -1398,16 +1542,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       resetAllData() {
         const next = createDefaultState();
         if (typeof window !== "undefined") {
-          window.localStorage.removeItem(STORAGE_KEY);
+          removeStorageKey(STORAGE_KEY);
+          if (auth.user) {
+            removeStorageKey(getAccountStorageKey(auth.user.id));
+          }
         }
         setState(next);
       },
     }),
-    [],
+    [auth.session, auth.user],
   );
 
   return (
-    <StoreContext.Provider value={{ state, hydrated, now, actions }}>
+    <StoreContext.Provider value={{ state, hydrated, now, syncMode, syncStatus, guestDataAvailable, actions }}>
       {children}
     </StoreContext.Provider>
   );

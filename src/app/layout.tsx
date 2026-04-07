@@ -3,6 +3,7 @@ import "./globals.css";
 import { BottomNav } from "@/components/bottom-nav";
 import { PWARegister } from "@/components/pwa-register";
 import { LaunchSplash } from "@/components/launch-splash";
+import { AuthProvider } from "@/lib/auth";
 import { BRANDING } from "@/lib/branding";
 import { StoreProvider } from "@/lib/store";
 
@@ -39,12 +40,14 @@ export default function RootLayout({
   return (
     <html className="dark" lang="en">
       <body className="bg-background text-foreground" style={{ backgroundColor: "#07111f" }}>
-        <StoreProvider>
-          <PWARegister />
-          <LaunchSplash />
-          {children}
-          <BottomNav />
-        </StoreProvider>
+        <AuthProvider>
+          <StoreProvider>
+            <PWARegister />
+            <LaunchSplash />
+            {children}
+            <BottomNav />
+          </StoreProvider>
+        </AuthProvider>
       </body>
     </html>
   );

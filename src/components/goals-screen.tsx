@@ -147,7 +147,7 @@ export function GoalsScreen() {
         </p>
       </header>
 
-      <div className="space-y-4 pb-4">
+      <div className="grid gap-6 pb-4 xl:grid-cols-[0.95fr_1.05fr] xl:items-start">
         <Card className="p-4">
           <SectionTitle title="Create goal" subtitle="Linked goals stay synced. Manual goals stay flexible." />
           <div className="space-y-3">

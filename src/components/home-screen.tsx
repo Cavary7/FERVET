@@ -70,8 +70,9 @@ export function HomeScreen() {
         </p>
       </header>
 
-      <div className="space-y-5">
-        <Card className="relative overflow-hidden border-blue-400/15 bg-[linear-gradient(135deg,rgba(22,50,95,0.95),rgba(8,17,31,0.96)_55%,rgba(5,10,20,0.98))]">
+      <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-5">
+          <Card className="relative overflow-hidden border-blue-400/15 bg-[linear-gradient(135deg,rgba(22,50,95,0.95),rgba(8,17,31,0.96)_55%,rgba(5,10,20,0.98))]">
           <div className="absolute right-[-3rem] top-[-3rem] h-36 w-36 rounded-full bg-blue-400/16 blur-3xl" />
           <div className="absolute bottom-[-4rem] left-[-2rem] h-40 w-40 rounded-full bg-cyan-300/8 blur-3xl" />
           <div className="relative">
@@ -80,26 +81,6 @@ export function HomeScreen() {
               {motto.latin}
             </p>
             <p className="mt-4 max-w-[24ch] text-base leading-7 text-blue-50/78">{motto.english}</p>
-          </div>
-        </Card>
-
-        <Card className="overflow-hidden border-blue-400/15 bg-[linear-gradient(180deg,rgba(26,56,112,0.58),rgba(11,20,36,0.96))]">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.28em] text-blue-100/55">Current streak</p>
-              <p className="mt-3 text-[4.25rem] font-semibold leading-none tracking-[-0.08em] text-white">
-                {overallStreak}
-              </p>
-              <p className="mt-3 text-sm text-blue-50/76">
-                {daily.complete ? "Today is complete." : "A full day extends the chain."}
-              </p>
-            </div>
-            <div className="min-w-28 rounded-[24px] border border-white/10 bg-white/[0.06] px-4 py-4 text-right">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-blue-100/50">Focus status</p>
-              <p className="mt-2 text-lg font-medium text-white">
-                {progressItems.filter((item) => item.complete).length}/{progressItems.length}
-              </p>
-            </div>
           </div>
         </Card>
 
@@ -131,10 +112,32 @@ export function HomeScreen() {
             ))}
           </Card>
         </section>
+        </div>
+
+        <div className="space-y-5">
+          <Card className="overflow-hidden border-blue-400/15 bg-[linear-gradient(180deg,rgba(26,56,112,0.58),rgba(11,20,36,0.96))]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.28em] text-blue-100/55">Current streak</p>
+                <p className="mt-3 text-[4.25rem] font-semibold leading-none tracking-[-0.08em] text-white">
+                  {overallStreak}
+                </p>
+                <p className="mt-3 text-sm text-blue-50/76">
+                  {daily.complete ? "Today is complete." : "A full day extends the chain."}
+                </p>
+              </div>
+              <div className="min-w-28 rounded-[24px] border border-white/10 bg-white/[0.06] px-4 py-4 text-right">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-blue-100/50">Focus status</p>
+                <p className="mt-2 text-lg font-medium text-white">
+                  {progressItems.filter((item) => item.complete).length}/{progressItems.length}
+                </p>
+              </div>
+            </div>
+          </Card>
 
         <section>
           <SectionTitle title="Today at a glance" />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-2">
             <MetricCard label="Language" value={`${getLanguageMinutesForDay(state, today)} min`} />
             <MetricCard label="Subjects" value={`${getSubjectMinutesForDay(state, today)} min`} />
             <MetricCard
@@ -165,6 +168,7 @@ export function HomeScreen() {
             <MetricCard label="Tasks" value={`${completedTasksToday}`} hint="Completed today" />
           </div>
         </section>
+        </div>
       </div>
     </Shell>
   );
