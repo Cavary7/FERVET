@@ -1,13 +1,36 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useAppStore } from "@/lib/store";
 import { Card, PillButton, SectionTitle, Shell } from "@/components/ui";
 
+function StatusMessage({
+  message,
+  tone,
+}: {
+  message: string;
+  tone: "error" | "info";
+}) {
+  return (
+    <div
+      className={`rounded-[20px] border px-4 py-3 text-sm ${
+        tone === "error"
+          ? "border-red-400/20 bg-red-500/10 text-red-100"
+          : "border-blue-400/20 bg-blue-500/10 text-blue-100"
+      }`}
+    >
+      {message}
+    </div>
+  );
+}
+
 export function AccountScreen({ mode = "profile" }: { mode?: "auth" | "profile" }) {
   const auth = useAuth();
   const { guestDataAvailable, syncMode, syncStatus, actions: storeActions } = useAppStore();
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   if (!auth.ready) {
     return (
@@ -42,23 +65,45 @@ export function AccountScreen({ mode = "profile" }: { mode?: "auth" | "profile" 
           </h1>
           <p className="mt-3 max-w-xl text-sm text-muted/90">
             {mode === "auth"
-              ? "Sign in with your account to keep Fervet synced across devices."
+              ? "Sign in with Google to back up and sync Fervet across devices."
               : "View your account status and manage synced data."}
           </p>
         </header>
+
+        {message ? <StatusMessage message={message} tone="info" /> : null}
+        {error ? <StatusMessage message={error} tone="error" /> : null}
 
         {!auth.session ? (
           <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
             <Card className="space-y-4">
               <SectionTitle
-                title="Account"
-                subtitle="Authentication UI is temporarily simplified while production build issues are being resolved."
+                title="Sign in"
+                subtitle="Use Google to sync your data safely."
               />
+
               <div className="space-y-3 text-sm text-muted/88">
-                <p>You are not signed in right now.</p>
                 <p>
-                  Local guest mode is still available, and your local data should continue working as before.
+                  Your app already saves locally on this device. Signing in adds cloud backup and
+                  cross-device sync.
                 </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <PillButton
+                  onClick={async () => {
+                    setError(null);
+                    setMessage(null);
+
+                    try {
+                      await auth.signInWithGoogle();
+                    } catch (err) {
+                      console.error(err);
+                      setError("Google sign-in could not start. Check your Supabase and Google redirect settings.");
+                    }
+                  }}
+                >
+                  Continue with Google
+                </PillButton>
               </div>
             </Card>
 
@@ -68,9 +113,9 @@ export function AccountScreen({ mode = "profile" }: { mode?: "auth" | "profile" 
                 subtitle="Local-first by default, account-backed when signed in."
               />
               <div className="space-y-3 text-sm text-muted/88">
-                <p>Guest mode keeps using localStorage and the existing backup system.</p>
+                <p>Guest mode keeps using localStorage and your current device data.</p>
                 <p>When signed in, your data can sync across devices through your account.</p>
-                <p>Existing local data is not overwritten automatically.</p>
+                <p>After signing in, import your current local data into your account once.</p>
               </div>
             </Card>
           </div>
@@ -89,7 +134,20 @@ export function AccountScreen({ mode = "profile" }: { mode?: "auth" | "profile" 
                 <Link href="/account/reset">
                   <PillButton variant="ghost">Change password</PillButton>
                 </Link>
-                <PillButton onClick={() => void auth.signOut()} variant="ghost">
+                <PillButton
+                  onClick={async () => {
+                    setError(null);
+                    setMessage(null);
+
+                    try {
+                      await auth.signOut();
+                    } catch (err) {
+                      console.error(err);
+                      setError("Could not sign out.");
+                    }
+                  }}
+                  variant="ghost"
+                >
                   Log out
                 </PillButton>
               </div>
@@ -123,6 +181,7 @@ export function AccountScreen({ mode = "profile" }: { mode?: "auth" | "profile" 
                       return;
                     }
                     void storeActions.importLocalDataToAccount();
+                    setMessage("Local data import started.");
                   }}
                 >
                   Import local data into account
