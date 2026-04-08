@@ -678,7 +678,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const loadKey = `${auth.user.id}:${auth.session.accessToken}`;
+      const loadKey = `${auth.user.id}:${auth.session.access_token}`;
       remoteLoadKeyRef.current = loadKey;
 
       try {
@@ -690,7 +690,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           setHydrated(true);
         }
 
-        const remote = await fetchUserAppState(auth.session.accessToken, auth.user.id);
+        const remote = await fetchUserAppState(auth.session.access_token, auth.user.id);
         if (cancelled || remoteLoadKeyRef.current !== loadKey) return;
         const nextState = normalizeState(remote?.data ?? cachedAccountState);
         saveAccountState(auth.user.id, nextState);
@@ -737,7 +737,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setSyncStatus("saving");
     saveTimeoutRef.current = window.setTimeout(async () => {
       try {
-        await upsertUserAppState(auth.session!.accessToken, auth.user!.id, state);
+        await upsertUserAppState(auth.session!.access_token, auth.user!.id, state);
         setSyncStatus("synced");
       } catch {
         setSyncStatus("error");
@@ -1492,7 +1492,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         try {
           const nextState = normalizeState(loadState(createDefaultState()));
           saveAccountState(auth.user.id, nextState);
-          await upsertUserAppState(auth.session.accessToken, auth.user.id, nextState);
+          await upsertUserAppState(auth.session.access_token, auth.user.id, nextState);
           initialSyncCompleteRef.current = true;
           setState(nextState);
           setGuestDataAvailable(hasMeaningfulData(nextState));

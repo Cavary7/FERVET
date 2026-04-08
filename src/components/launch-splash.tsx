@@ -19,6 +19,17 @@ export function LaunchSplash() {
   }, [hydrated, state]);
 
   useEffect(() => {
+    const safetyTimer = window.setTimeout(() => {
+      setVisible(false);
+      window.setTimeout(() => setMounted(false), 450);
+    }, 3800);
+
+    return () => {
+      window.clearTimeout(safetyTimer);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!hydrated || !motto) {
       return;
     }

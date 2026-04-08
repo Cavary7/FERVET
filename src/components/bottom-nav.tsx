@@ -10,6 +10,7 @@ const items = [
   { href: "/goals", label: "Goals" },
   { href: "/progress", label: "Progress" },
   { href: "/tasks", label: "Tasks" },
+  { href: "/profile", label: "Profile" },
 ];
 
 export function BottomNav() {
@@ -17,8 +18,8 @@ export function BottomNav() {
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.45rem)]">
-      <nav className="pointer-events-auto w-full max-w-md rounded-3xl border border-border bg-panel/95 p-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop-blur">
-        <ul className="flex items-stretch justify-between gap-1">
+      <nav className="pointer-events-auto w-full max-w-3xl rounded-3xl border border-border bg-panel/95 p-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop-blur">
+        <ul className="flex items-stretch justify-between gap-1 overflow-x-auto">
           {items.map((item) => {
             const active = pathname === item.href;
             return (

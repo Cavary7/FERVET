@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { BottomNav } from "@/components/bottom-nav";
+import { AuthGate } from "@/components/auth-gate";
 import { PWARegister } from "@/components/pwa-register";
 import { LaunchSplash } from "@/components/launch-splash";
 import { AuthProvider } from "@/lib/auth";
@@ -44,8 +45,10 @@ export default function RootLayout({
           <StoreProvider>
             <PWARegister />
             <LaunchSplash />
-            {children}
-            <BottomNav />
+            <AuthGate>
+              {children}
+              <BottomNav />
+            </AuthGate>
           </StoreProvider>
         </AuthProvider>
       </body>

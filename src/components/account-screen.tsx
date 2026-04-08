@@ -6,6 +6,15 @@ import { useAuth } from "@/lib/auth";
 import { useAppStore } from "@/lib/store";
 import { Card, Field, Input, PillButton, SectionTitle, Shell } from "@/components/ui";
 
+function validatePassword(password: string) {
+  return {
+    length: password.length >= 8,
+    letter: /[A-Za-z]/.test(password),
+    number: /\d/.test(password),
+    special: /[^A-Za-z0-9]/.test(password),
+  };
+}
+
 function StatusMessage({ message, tone }: { message: string; tone: "error" | "info" }) {
   return (
     <div
@@ -20,16 +29,17 @@ function StatusMessage({ message, tone }: { message: string; tone: "error" | "in
   );
 }
 
-export function AccountScreen() {
+export function AccountScreen({ mode = "profile" }: { mode?: "auth" | "profile" }) {
   const auth = useAuth();
   const { actions: storeActions, guestDataAvailable, syncMode, syncStatus } = useAppStore();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [country, setCountry] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const passwordRules = validatePassword(password);
 
   if (!auth.configured) {
     return (
@@ -58,10 +68,16 @@ export function AccountScreen() {
     <Shell>
       <div className="mx-auto w-full max-w-5xl space-y-6">
         <header className="mb-3">
-          <p className="text-[11px] uppercase tracking-[0.28em] text-blue-200/65">Account</p>
-          <h1 className="mt-3 text-white">Auth, profile, and sync.</h1>
+          <p className="text-[11px] uppercase tracking-[0.28em] text-blue-200/65">
+            {mode === "auth" ? "Welcome" : "Profile"}
+          </p>
+          <h1 className="mt-3 text-white">
+            {mode === "auth" ? "Sign in to sync Fervet." : "Auth, profile, and sync."}
+          </h1>
           <p className="mt-3 max-w-xl text-sm text-muted/90">
-            Sign in to sync Fervet across devices, keep your profile together, and safely import local data into your account.
+            {mode === "auth"
+              ? "Create a Fervet account to sync your progress across devices. It only takes a minute."
+              : "Sign in to sync Fervet across devices, keep your profile together, and safely import local data into your account."}
           </p>
         </header>
 
@@ -72,7 +88,7 @@ export function AccountScreen() {
           <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
             <Card className="space-y-4">
               <SectionTitle
-                title={mode === "signin" ? "Sign in" : "Create account"}
+                title={authMode === "signin" ? "Sign in" : "Create account"}
                 subtitle="Google, Apple, or email."
               />
               <div className="flex gap-3">
@@ -82,7 +98,7 @@ export function AccountScreen() {
                 </PillButton>
               </div>
               <div className="grid gap-3">
-                {mode === "signup" ? (
+                {authMode === "signup" ? (
                   <>
                     <Field label="Username">
                       <Input onChange={(event) => setUsername(event.target.value)} value={username} />
@@ -108,9 +124,20 @@ export function AccountScreen() {
                 <Field label="Password">
                   <Input onChange={(event) => setPassword(event.target.value)} type="password" value={password} />
                 </Field>
+                {authMode === "signup" ? (
+                  <div className="rounded-[20px] border border-white/8 bg-white/[0.04] px-4 py-3 text-sm text-muted/88">
+                    <p className="mb-2 text-white">Password must include:</p>
+                    <div className="grid gap-1">
+                      <p className={passwordRules.length ? "text-blue-100" : "text-muted/88"}>At least 8 characters</p>
+                      <p className={passwordRules.letter ? "text-blue-100" : "text-muted/88"}>At least 1 letter</p>
+                      <p className={passwordRules.number ? "text-blue-100" : "text-muted/88"}>At least 1 number</p>
+                      <p className={passwordRules.special ? "text-blue-100" : "text-muted/88"}>At least 1 special character</p>
+                    </div>
+                  </div>
+                ) : null}
                 <PillButton
                   onClick={() => {
-                    if (mode === "signin") {
+                    if (authMode === "signin") {
                       void auth.actions.signInWithEmail(email, password);
                     } else {
                       void auth.actions.signUp({
@@ -124,12 +151,12 @@ export function AccountScreen() {
                     }
                   }}
                 >
-                  {mode === "signin" ? "Sign in" : "Create account"}
+                  {authMode === "signin" ? "Sign in" : "Create account"}
                 </PillButton>
               </div>
               <div className="flex flex-wrap gap-3 text-sm">
-                <button className="text-blue-100/80" onClick={() => setMode(mode === "signin" ? "signup" : "signin")} type="button">
-                  {mode === "signin" ? "Need an account?" : "Already have an account?"}
+                <button className="text-blue-100/80" onClick={() => setAuthMode(authMode === "signin" ? "signup" : "signin")} type="button">
+                  {authMode === "signin" ? "Need an account?" : "Already have an account?"}
                 </button>
                 <button className="text-blue-100/80" onClick={() => void auth.actions.requestPasswordReset(email)} type="button">
                   Forgot password
@@ -141,7 +168,7 @@ export function AccountScreen() {
             </Card>
 
             <Card className="space-y-4">
-              <SectionTitle title="How sync works" subtitle="Local-first by default, account-backed when you sign in." />
+              <SectionTitle title={mode === "auth" ? "Why create an account" : "How sync works"} subtitle="Local-first by default, account-backed when you sign in." />
               <div className="space-y-3 text-sm text-muted/88">
                 <p>Guest mode keeps using localStorage and the existing backup system.</p>
                 <p>Signed-in mode stores your data under your account so the same habits, tasks, logs, and goals can load on another device.</p>
