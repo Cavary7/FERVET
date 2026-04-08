@@ -1,63 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useAppStore } from "@/lib/store";
-import { Card, Field, Input, PillButton, SectionTitle, Shell } from "@/components/ui";
-
-function validatePassword(password: string) {
-  return {
-    length: password.length >= 8,
-    letter: /[A-Za-z]/.test(password),
-    number: /\d/.test(password),
-    special: /[^A-Za-z0-9]/.test(password),
-  };
-}
-
-function StatusMessage({ message, tone }: { message: string; tone: "error" | "info" }) {
-  return (
-    <div
-      className={`rounded-[20px] border px-4 py-3 text-sm ${
-        tone === "error"
-          ? "border-red-400/20 bg-red-500/10 text-red-100"
-          : "border-blue-400/20 bg-blue-500/10 text-blue-100"
-      }`}
-    >
-      {message}
-    </div>
-  );
-}
+import { Card, PillButton, SectionTitle, Shell } from "@/components/ui";
 
 export function AccountScreen({ mode = "profile" }: { mode?: "auth" | "profile" }) {
   const auth = useAuth();
-  const { actions: storeActions, guestDataAvailable, syncMode, syncStatus } = useAppStore();
-  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [username, setUsername] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [country, setCountry] = useState("");
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const passwordRules = validatePassword(password);
+  const { guestDataAvailable, syncMode, syncStatus, actions: storeActions } = useAppStore();
 
-  if (!auth.configured) {
+  if (!auth.ready) {
     return (
       <Shell>
-        <div className="mx-auto w-full max-w-2xl space-y-5">
+        <div className="mx-auto w-full max-w-5xl space-y-6">
           <header className="mb-3">
-            <p className="text-[11px] uppercase tracking-[0.28em] text-blue-200/65">Account</p>
-            <h1 className="mt-3 text-white">Connect Fervet to Supabase</h1>
-            <p className="mt-3 max-w-xl text-sm text-muted/90">
-              Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to enable account auth,
-              email flows, profile syncing, and multi-device data sync.
+            <p className="text-[11px] uppercase tracking-[0.28em] text-blue-200/65">
+              {mode === "auth" ? "Welcome" : "Profile"}
             </p>
+            <h1 className="mt-3 text-white">
+              {mode === "auth" ? "Sign in to sync Fervet." : "Auth, profile, and sync."}
+            </h1>
           </header>
-          <Card className="space-y-3">
-            <p className="text-sm text-muted/88">Guest mode is still active, including localStorage and backups.</p>
-            <Link href="/progress">
-              <PillButton variant="ghost">Back to Progress</PillButton>
-            </Link>
+
+          <Card className="space-y-4">
+            <p className="text-sm text-muted/88">Loading account...</p>
           </Card>
         </div>
       </Shell>
@@ -76,159 +42,54 @@ export function AccountScreen({ mode = "profile" }: { mode?: "auth" | "profile" 
           </h1>
           <p className="mt-3 max-w-xl text-sm text-muted/90">
             {mode === "auth"
-              ? "Create a Fervet account to sync your progress across devices. It only takes a minute."
-              : "Sign in to sync Fervet across devices, keep your profile together, and safely import local data into your account."}
+              ? "Sign in with your account to keep Fervet synced across devices."
+              : "View your account status and manage synced data."}
           </p>
         </header>
-
-        {auth.statusMessage ? <StatusMessage message={auth.statusMessage} tone="info" /> : null}
-        {auth.errorMessage ? <StatusMessage message={auth.errorMessage} tone="error" /> : null}
 
         {!auth.session ? (
           <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
             <Card className="space-y-4">
               <SectionTitle
-                title={authMode === "signin" ? "Sign in" : "Create account"}
-                subtitle="Google, Apple, or email."
+                title="Account"
+                subtitle="Authentication UI is temporarily simplified while production build issues are being resolved."
               />
-              <div className="flex gap-3">
-                <PillButton onClick={() => auth.actions.signInWithProvider("google")}>Continue with Google</PillButton>
-                <PillButton onClick={() => auth.actions.signInWithProvider("apple")} variant="ghost">
-                  Continue with Apple
-                </PillButton>
-              </div>
-              <div className="grid gap-3">
-                {authMode === "signup" ? (
-                  <>
-                    <Field label="Username">
-                      <Input onChange={(event) => setUsername(event.target.value)} value={username} />
-                    </Field>
-                    <Field label="Display name">
-                      <Input onChange={(event) => setDisplayName(event.target.value)} value={displayName} />
-                    </Field>
-                    <Field label="Country">
-                      <Input onChange={(event) => setCountry(event.target.value)} value={country} />
-                    </Field>
-                    <Field label="Profile picture">
-                      <Input
-                        accept="image/*"
-                        onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)}
-                        type="file"
-                      />
-                    </Field>
-                  </>
-                ) : null}
-                <Field label="Email">
-                  <Input onChange={(event) => setEmail(event.target.value)} type="email" value={email} />
-                </Field>
-                <Field label="Password">
-                  <Input onChange={(event) => setPassword(event.target.value)} type="password" value={password} />
-                </Field>
-                {authMode === "signup" ? (
-                  <div className="rounded-[20px] border border-white/8 bg-white/[0.04] px-4 py-3 text-sm text-muted/88">
-                    <p className="mb-2 text-white">Password must include:</p>
-                    <div className="grid gap-1">
-                      <p className={passwordRules.length ? "text-blue-100" : "text-muted/88"}>At least 8 characters</p>
-                      <p className={passwordRules.letter ? "text-blue-100" : "text-muted/88"}>At least 1 letter</p>
-                      <p className={passwordRules.number ? "text-blue-100" : "text-muted/88"}>At least 1 number</p>
-                      <p className={passwordRules.special ? "text-blue-100" : "text-muted/88"}>At least 1 special character</p>
-                    </div>
-                  </div>
-                ) : null}
-                <PillButton
-                  onClick={() => {
-                    if (authMode === "signin") {
-                      void auth.actions.signInWithEmail(email, password);
-                    } else {
-                      void auth.actions.signUp({
-                        username,
-                        email,
-                        password,
-                        displayName,
-                        country,
-                        avatarFile,
-                      });
-                    }
-                  }}
-                >
-                  {authMode === "signin" ? "Sign in" : "Create account"}
-                </PillButton>
-              </div>
-              <div className="flex flex-wrap gap-3 text-sm">
-                <button className="text-blue-100/80" onClick={() => setAuthMode(authMode === "signin" ? "signup" : "signin")} type="button">
-                  {authMode === "signin" ? "Need an account?" : "Already have an account?"}
-                </button>
-                <button className="text-blue-100/80" onClick={() => void auth.actions.requestPasswordReset(email)} type="button">
-                  Forgot password
-                </button>
-                <button className="text-blue-100/80" onClick={() => void auth.actions.resendVerification(email)} type="button">
-                  Resend verification
-                </button>
+              <div className="space-y-3 text-sm text-muted/88">
+                <p>You are not signed in right now.</p>
+                <p>
+                  Local guest mode is still available, and your local data should continue working as before.
+                </p>
               </div>
             </Card>
 
             <Card className="space-y-4">
-              <SectionTitle title={mode === "auth" ? "Why create an account" : "How sync works"} subtitle="Local-first by default, account-backed when you sign in." />
+              <SectionTitle
+                title="How sync works"
+                subtitle="Local-first by default, account-backed when signed in."
+              />
               <div className="space-y-3 text-sm text-muted/88">
                 <p>Guest mode keeps using localStorage and the existing backup system.</p>
-                <p>Signed-in mode stores your data under your account so the same habits, tasks, logs, and goals can load on another device.</p>
-                <p>Existing local data is not overwritten automatically. After sign-in, you can explicitly import it into your account.</p>
+                <p>When signed in, your data can sync across devices through your account.</p>
+                <p>Existing local data is not overwritten automatically.</p>
               </div>
             </Card>
           </div>
         ) : (
           <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
             <Card className="space-y-4">
-              <SectionTitle title="Profile" subtitle="Edit your account details and avatar." />
-              <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.05]">
-                  {auth.profile?.avatar_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img alt="Profile avatar" className="h-full w-full object-cover" src={auth.profile.avatar_url} />
-                  ) : (
-                    <span className="text-lg font-medium text-white">
-                      {(auth.profile?.display_name ?? auth.profile?.username ?? auth.user?.email ?? "F").slice(0, 1).toUpperCase()}
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <p className="text-base font-medium text-white">{auth.profile?.display_name || auth.profile?.username || "Fervet account"}</p>
-                  <p className="text-sm text-muted/85">{auth.user?.email}</p>
-                </div>
+              <SectionTitle title="Profile" subtitle="Current signed-in account." />
+              <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-blue-100/45">Email</p>
+                <p className="mt-2 text-base font-medium text-white">
+                  {auth.user?.email ?? "Signed in"}
+                </p>
               </div>
-              <Field label="Username">
-                <Input defaultValue={auth.profile?.username ?? ""} id="profile-username" />
-              </Field>
-              <Field label="Display name">
-                <Input defaultValue={auth.profile?.display_name ?? ""} id="profile-display-name" />
-              </Field>
-              <Field label="Country">
-                <Input defaultValue={auth.profile?.country ?? ""} id="profile-country" />
-              </Field>
-              <Field label="Profile picture">
-                <Input accept="image/*" id="profile-avatar" type="file" />
-              </Field>
+
               <div className="flex flex-wrap gap-3">
-                <PillButton
-                  onClick={() => {
-                    const usernameInput = document.getElementById("profile-username") as HTMLInputElement | null;
-                    const displayNameInput = document.getElementById("profile-display-name") as HTMLInputElement | null;
-                    const countryInput = document.getElementById("profile-country") as HTMLInputElement | null;
-                    const avatarInput = document.getElementById("profile-avatar") as HTMLInputElement | null;
-                    void auth.actions.updateProfile({
-                      username: usernameInput?.value ?? auth.profile?.username ?? "",
-                      displayName: displayNameInput?.value ?? "",
-                      country: countryInput?.value ?? "",
-                      avatarFile: avatarInput?.files?.[0] ?? null,
-                    });
-                  }}
-                >
-                  Save profile
-                </PillButton>
                 <Link href="/account/reset">
                   <PillButton variant="ghost">Change password</PillButton>
                 </Link>
-                <PillButton onClick={() => void auth.actions.signOut()} variant="ghost">
+                <PillButton onClick={() => void auth.signOut()} variant="ghost">
                   Log out
                 </PillButton>
               </div>
@@ -239,22 +100,28 @@ export function AccountScreen({ mode = "profile" }: { mode?: "auth" | "profile" 
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">
                   <p className="text-[11px] uppercase tracking-[0.18em] text-blue-100/45">Mode</p>
-                  <p className="mt-2 text-lg font-medium text-white">{syncMode === "account" ? "Account sync" : "Guest local"}</p>
+                  <p className="mt-2 text-lg font-medium text-white">
+                    {syncMode === "account" ? "Account sync" : "Guest local"}
+                  </p>
                 </div>
                 <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">
                   <p className="text-[11px] uppercase tracking-[0.18em] text-blue-100/45">Status</p>
                   <p className="mt-2 text-lg font-medium text-white">{syncStatus}</p>
                 </div>
               </div>
+
               <div className="space-y-3 text-sm text-muted/88">
-                <p>Signed-in data syncs goals, habits, tasks, study logs, activity logs, running logs, and body metrics.</p>
+                <p>Signed-in data syncs your app data through your account.</p>
                 <p>Backups still work exactly as before.</p>
               </div>
+
               <div className="flex flex-wrap gap-3">
                 <PillButton
                   disabled={!guestDataAvailable}
                   onClick={() => {
-                    if (!window.confirm("Import your current local data into this account and replace the synced copy?")) return;
+                    if (!window.confirm("Import your current local data into this account and replace the synced copy?")) {
+                      return;
+                    }
                     void storeActions.importLocalDataToAccount();
                   }}
                 >
